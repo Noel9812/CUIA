@@ -53,7 +53,6 @@ The backend exposes RESTful APIs that allow the frontend to:
 - Upload operational datasets
 - Retrieve analytical results
 - Interact with the AI Copilot
-- Receive notifications
 - Access application configuration
 The backend is responsible for:
 - Authentication validation
@@ -124,7 +123,7 @@ Examples:
 ```
 GET /api/v1/dashboard/team
 POST /api/v1/copilot/chat
-POST /api/v1/imports/jira/sync
+POST /api/v1/admin/background-jobs/jira-sync
 ```
 Future API changes should introduce new versions rather than breaking existing contracts.
 ---
@@ -177,7 +176,6 @@ Example:
 Leave and Skill datasets are uploaded using multipart/form-data.
 Supported formats:
 - CSV
-- Microsoft Excel (.xlsx)
 ---
 ## Character Encoding
 UTF-8 is used for all requests.
@@ -280,6 +278,8 @@ Example:
 | FORBIDDEN | User lacks permission |
 | NOT_FOUND | Requested resource does not exist |
 | IMPORT_FAILED | File import unsuccessful |
+| DATA_QUALITY_ERROR | Validation failure indicating malformed external data |
+| JOB_EXECUTION_FAILED | Background job failed to execute |
 | INTERNAL_ERROR | Unexpected server error |
 ---
 # 11. Pagination, Filtering & Sorting
@@ -288,7 +288,7 @@ Endpoints returning collections may support pagination.
 ## Pagination
 Example:
 ```
-GET /api/v1/notifications?page=1&pageSize=20
+GET /api/v1/imports/history?page=1&pageSize=20
 ```
 ---
 ## Filtering
@@ -566,14 +566,14 @@ Leadership
 ---
 # Authorization Rules
 The following authorization rules apply to all endpoints in this section.
-| Endpoint | Delivery Manager | Leadership |
-|----------|------------------|------------|
-| GET /auth/me | ✓ | ✓ |
-| GET /users/me | ✓ | ✓ |
-| GET /users/team | Own Team | All Teams (Scoped) |
-| GET /users/{userId} | Own Team | Scoped Access |
-| GET /teams | Own Team | All Teams |
-| GET /teams/{teamId} | Own Team | All Teams |
+| Endpoint | Delivery Manager | Leadership | Platform Admin |
+|----------|------------------|------------|----------------|
+| GET /auth/me | ✓ | ✓ | ✓ |
+| GET /users/me | ✓ | ✓ | ✓ |
+| GET /users/team | Own Team | All Teams (Scoped) | All Teams |
+| GET /users/{userId} | Own Team | Scoped Access | All Users |
+| GET /teams | Own Team | All Teams | All Teams |
+| GET /teams/{teamId} | Own Team | All Teams | All Teams |
 Every request is validated using:
 1. Microsoft Entra ID access token.
 2. Application role.
@@ -596,76 +596,16 @@ Analytical processing is initiated separately after successful data synchronizat
 # Module Overview
 | Module | Purpose |
 |----------|---------|
-| Jira Synchronization | Import Jira operational data |
 | Leave Import | Upload engineer leave records |
 | Skill Import | Upload engineer skill mappings |
 | Import History | Track completed import operations |
 | Analytics Execution | Execute deterministic analytics |
 ---
-# Jira Synchronization APIs
----
-## POST /api/v1/imports/jira/sync
-### Purpose
-Synchronizes operational data from Jira into the local application database.
-The synchronization imports only the fields required by the application for workforce analytics.
-Imported data includes:
-- Issues
-- Worklogs
-- Assignees
-- Estimates
-- Priorities
-- Status
-- Resolution data
-- Sprint information
----
-### Authentication
-Required
----
-### Authorization
-Leadership
-Delivery Manager
----
-### Request Body
-No request body is required.
-The Jira integration configured within the application is used automatically.
----
-### Processing
-The backend performs the following steps:
-1. Connect to Jira REST API.
-2. Retrieve configured project data.
-3. Validate retrieved records.
-4. Store operational data.
-5. Record import history.
-6. Return synchronization summary.
-Analytics are **not** executed during this process.
----
-### Success Response
-```json
-{
-  "success": true,
-  "message": "Jira synchronization completed successfully.",
-  "data": {
-    "issuesImported": 186,
-    "worklogsImported": 932,
-    "durationSeconds": 18
-  },
-  "metadata": {}
-}
-```
----
-### Possible Status Codes
-| Status | Meaning |
-|---------|---------|
-| 200 | Synchronization completed |
-| 401 | Authentication failed |
-| 403 | Access denied |
-| 500 | Jira synchronization failed |
----
 # Leave Import APIs
 ---
 ## POST /api/v1/imports/leave
 ### Purpose
-Imports approved leave records from a CSV or Microsoft Excel file.
+Imports approved leave records from a CSV file.
 Imported leave data is used to calculate engineer availability.
 ---
 ### Authentication
@@ -682,7 +622,6 @@ multipart/form-data
 ```
 Uploaded File:
 - CSV
-- XLSX
 ---
 ### Processing
 The backend performs the following steps:
@@ -732,7 +671,6 @@ multipart/form-data
 ```
 Supported Formats:
 - CSV
-- XLSX
 ---
 ### Processing
 1. Parse uploaded file.
@@ -896,15 +834,14 @@ Returns the status and summary of a previously executed Analytics Run.
 ```
 ---
 # Authorization Rules
-| Endpoint | Delivery Manager | Leadership |
-|----------|------------------|------------|
-| POST /imports/jira/sync | ✓ | ✓ |
-| POST /imports/leave | ✓ | ✓ |
-| POST /imports/skills | ✓ | ✓ |
-| GET /imports/history | ✓ | ✓ |
-| GET /imports/history/{id} | ✓ | ✓ |
-| POST /analytics/run | ✓ | ✓ |
-| GET /analytics/run/{id} | ✓ | ✓ |
+| Endpoint | Delivery Manager | Leadership | Platform Admin |
+|----------|------------------|------------|----------------|
+| POST /imports/leave | ✓ | ✓ | ✓ |
+| POST /imports/skills | ✓ | ✓ | ✓ |
+| GET /imports/history | ✓ | ✓ | ✓ |
+| GET /imports/history/{id} | ✓ | ✓ | ✓ |
+| POST /analytics/run | ✓ | ✓ | ✓ |
+| GET /analytics/run/{id} | ✓ | ✓ | ✓ |
 All requests require:
 1. Valid Microsoft Entra ID access token.
 2. Backend role validation.
@@ -1193,18 +1130,18 @@ Recommendations are derived from analytical results and are presented to dashboa
 ```
 ---
 # Authorization Rules
-| Endpoint | Delivery Manager | Leadership |
-|----------|------------------|------------|
-| GET /dashboard/executive | ✗ | ✓ |
-| GET /dashboard/team | Own Team | Authorized Teams |
-| GET /dashboard/forecast | Own Scope | Authorized Scope |
-| GET /analytics/utilization | Own Scope | Authorized Scope |
-| GET /analytics/workload | Own Scope | Authorized Scope |
-| GET /analytics/productivity | Own Scope | Authorized Scope |
-| GET /analytics/estimation | Own Scope | Authorized Scope |
-| GET /analytics/forecast | Own Scope | Authorized Scope |
-| GET /analytics/skills | Own Scope | Authorized Scope |
-| GET /analytics/recommendations | Own Scope | Authorized Scope |
+| Endpoint | Delivery Manager | Leadership | Platform Admin |
+|----------|------------------|------------|----------------|
+| GET /dashboard/executive | ✗ | ✓ | ✗ |
+| GET /dashboard/team | Own Team | Authorized Teams | ✗ |
+| GET /dashboard/forecast | Own Scope | Authorized Scope | ✗ |
+| GET /analytics/utilization | Own Scope | Authorized Scope | ✗ |
+| GET /analytics/workload | Own Scope | Authorized Scope | ✗ |
+| GET /analytics/productivity | Own Scope | Authorized Scope | ✗ |
+| GET /analytics/estimation | Own Scope | Authorized Scope | ✗ |
+| GET /analytics/forecast | Own Scope | Authorized Scope | ✗ |
+| GET /analytics/skills | Own Scope | Authorized Scope | ✗ |
+| GET /analytics/recommendations | Own Scope | Authorized Scope | ✗ |
 Every request is validated using:
 1. Microsoft Entra ID access token.
 2. Application role.
@@ -1433,12 +1370,12 @@ Leadership
 ```
 ---
 # Authorization Rules
-| Endpoint | Delivery Manager | Leadership |
-|----------|------------------|------------|
-| POST /copilot/chat | Own Scope | Authorized Scope |
-| GET /copilot/conversations | Own Conversations | Own Conversations |
-| GET /copilot/conversations/{id} | Own Conversations | Own Conversations |
-| GET /copilot/questions | ✓ | ✓ |
+| Endpoint | Delivery Manager | Leadership | Platform Admin |
+|----------|------------------|------------|----------------|
+| POST /copilot/chat | Own Scope | Authorized Scope | ✗ |
+| GET /copilot/conversations | Own Conversations | Own Conversations | ✗ |
+| GET /copilot/conversations/{id} | Own Conversations | Own Conversations | ✗ |
+| GET /copilot/questions | ✓ | ✓ | ✗ |
 Every request is validated using:
 1. Microsoft Entra ID access token.
 2. Application role.
@@ -1460,12 +1397,15 @@ The backend ensures:
 The AI Copilot APIs provide secure natural language access to workforce intelligence.
 Rather than directly querying the database, the Copilot orchestrates deterministic backend services through LangGraph, retrieves authorized analytical results, and generates contextual explanations using the configured language model.
 This architecture preserves deterministic analytics, enforces RBAC before AI execution, and ensures the Copilot remains an explanation layer rather than a calculation engine.
-The next section defines the Notification, Configuration, and System APIs that support application operations and administration.
+The next section defines the Platform Administration, Configuration, and System APIs that support application operations and administration.
 ---
-# 16. Notification, Configuration & System APIs
+# 16. Platform Administration, Configuration & System APIs
 This section defines the APIs that support operational capabilities of the application.
 These APIs are responsible for:
-- Delivering notifications
+- Configuring the Jira integration
+- Resolving identity mappings
+- Managing data quality issues
+- Monitoring background jobs
 - Exposing application configuration
 - Reporting application health
 - Monitoring external integrations
@@ -1474,47 +1414,161 @@ These APIs do not perform workforce analytics.
 # Module Overview
 | Module | Purpose |
 |----------|---------|
-| Notifications | User notification management |
+| Platform Administration | Manage external integrations and data quality |
 | Settings | Read-only application configuration |
 | System | Health and operational status |
 ---
-# Notification APIs
-Notifications provide proactive updates generated by the Analytics Engine.
-Examples include:
-- Daily workforce summary
-- Capacity risk alerts
-- Forecast warnings
-- Import completion notifications
+# Platform Administration APIs
+Platform Administration APIs manage the integration of the application with external systems.
+Only users with the Platform Administrator role may access these APIs.
+
 ---
-## GET /api/v1/notifications
+## GET /api/v1/admin/jira-config
 ### Purpose
-Returns notifications visible to the authenticated user.
+Retrieves the current Jira configuration used for synchronization.
+Sensitive information (like authentication secrets) is masked.
 ---
 ### Authentication
 Required
 ---
 ### Authorization
-Delivery Manager
-Leadership
+Platform Admin
 ---
 ### Query Parameters
-| Parameter | Description |
-|-----------|-------------|
-| page | Optional page number |
-| pageSize | Optional page size |
+None
 ---
 ### Success Response
 ```json
 {
   "success": true,
-  "message": "Notifications retrieved successfully.",
+  "message": "Jira configuration retrieved successfully.",
+  "data": {
+    "baseUrl": "https://jira.example.com",
+    "authMethod": "API Token",
+    "authStatus": "Connected",
+    "lastConnectionTestAt": "2026-08-12T08:00:00Z",
+    "lastSuccessfulSyncAt": "2026-08-12T09:00:00Z",
+    "syncSchedule": "0 2 * * *",
+    "syncStatus": "Active"
+  },
+  "metadata": {}
+}
+```
+---
+### Possible Status Codes
+| Status | Meaning |
+|---------|---------|
+| 200 | Configuration retrieved |
+| 401 | Authentication failed |
+| 403 | Access denied (Requires Platform Admin) |
+---
+## PUT /api/v1/admin/jira-config
+### Purpose
+Updates the Jira configuration settings, including credentials and sync schedules.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Request Body
+```json
+{
+  "baseUrl": "https://jira.example.com",
+  "authMethod": "API Token",
+  "apiToken": "super-secret-token",
+  "syncSchedule": "0 2 * * *",
+  "syncStatus": "Active"
+}
+```
+---
+### Validation Rules
+- baseUrl must be a valid URL.
+- syncSchedule must be a valid cron expression.
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Jira configuration updated successfully.",
+  "data": {
+    "baseUrl": "https://jira.example.com",
+    "syncStatus": "Active"
+  },
+  "metadata": {}
+}
+```
+---
+## POST /api/v1/admin/jira-config/test
+### Purpose
+Validates the current Jira connectivity without saving new configuration.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Request Body
+```json
+{
+  "baseUrl": "https://jira.example.com",
+  "authMethod": "API Token",
+  "apiToken": "super-secret-token"
+}
+```
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Connection test successful.",
+  "data": {
+    "status": "Connected"
+  },
+  "metadata": {}
+}
+```
+---
+### Failure Cases
+- 400 Validation Error: Invalid URL or missing token.
+- 502 Bad Gateway: Jira API is unreachable.
+- 401 Unauthorized: Jira rejected the credentials.
+---
+# Identity Mapping APIs
+Identity Mapping APIs resolve external users in Jira to their Microsoft Entra ID equivalent.
+---
+## GET /api/v1/admin/identity-mappings
+### Purpose
+Returns identity mappings for Platform Administrators to review, especially unmapped identities that prevent worklog attribution.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Query Parameters
+| Parameter | Description |
+|-----------|-------------|
+| page | Pagination index |
+| pageSize | Number of records per page |
+| status | Filter by Mapped, Unmapped, or Ignored |
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Identity mappings retrieved successfully.",
   "data": [
     {
-      "id": "NOT-001",
-      "title": "Daily Workforce Summary",
-      "type": "Summary",
-      "createdAt": "2026-08-12T08:00:00Z",
-      "read": false
+      "id": "MAP-001",
+      "jiraAccountId": "557058:f58131cb-b67d",
+      "jiraEmail": "noel.m@example.com",
+      "mappingStatus": "Unmapped",
+      "internalUserId": null,
+      "lastValidatedAt": "2026-08-12T09:00:00Z"
     }
   ],
   "metadata": {
@@ -1523,50 +1577,259 @@ Leadership
 }
 ```
 ---
-## GET /api/v1/notifications/{notificationId}
+## GET /api/v1/admin/identity-mappings/{id}
 ### Purpose
-Returns the complete content of a notification.
+Retrieves details for a single identity mapping.
+---
+### Authorization
+Platform Admin
 ---
 ### Path Parameters
 | Parameter | Description |
 |-----------|-------------|
-| notificationId | Notification identifier |
+| id | Identity Mapping Identifier |
 ---
 ### Success Response
 ```json
 {
   "success": true,
-  "message": "Notification retrieved successfully.",
+  "message": "Identity mapping retrieved successfully.",
   "data": {
-    "id": "NOT-001",
-    "title": "Daily Workforce Summary",
-    "content": "Overall team utilization is 82%. Rahul is overloaded. Noel is underutilized.",
-    "createdAt": "2026-08-12T08:00:00Z"
+      "id": "MAP-001",
+      "jiraAccountId": "557058:f58131cb-b67d",
+      "mappingStatus": "Unmapped"
   },
   "metadata": {}
 }
 ```
 ---
-## PATCH /api/v1/notifications/{notificationId}/read
+## PATCH /api/v1/admin/identity-mappings/{id}
 ### Purpose
-Marks a notification as read.
+Allows a Platform Administrator to manually link an unmapped Jira user to an internal application user or ignore it.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Request Body
+```json
+{
+  "internalUserId": "USR-101",
+  "mappingStatus": "Mapped"
+}
+```
+---
+### Validation Rules
+- internalUserId must exist in the application database if mappingStatus is Mapped.
 ---
 ### Success Response
 ```json
 {
   "success": true,
-  "message": "Notification marked as read.",
+  "message": "Identity mapped successfully.",
   "data": {
-    "id": "NOT-001",
-    "read": true
+    "mappingStatus": "Mapped"
   },
   "metadata": {}
 }
 ```
 ---
-### Business Rules
-- Users may access only their own notifications.
-- Read status is maintained per user.
+# Data Quality APIs
+Data Quality APIs expose malformed records flagged during imports (Graceful Degradation).
+---
+## GET /api/v1/admin/data-quality-issues
+### Purpose
+Returns data quality issues identified during data validation.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Query Parameters
+| Parameter | Description |
+|-----------|-------------|
+| page | Pagination index |
+| pageSize | Number of records per page |
+| severity | Filter by Severity (High, Medium, Low) |
+| status | Filter by Status (Open, Resolved, Ignored) |
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Data quality issues retrieved successfully.",
+  "data": [
+    {
+      "id": "DQ-001",
+      "sourceEntity": "Jira Issue",
+      "sourceRecordId": "PLAT-402",
+      "validationCategory": "Missing Estimate",
+      "severity": "Medium",
+      "resolutionStatus": "Open"
+    }
+  ],
+  "metadata": {
+    "count": 1
+  }
+}
+```
+---
+## GET /api/v1/admin/data-quality-issues/{id}
+### Purpose
+Retrieves detailed information about a single data quality issue.
+---
+### Authorization
+Platform Admin
+---
+### Path Parameters
+| Parameter | Description |
+|-----------|-------------|
+| id | Issue Identifier |
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Data quality issue retrieved.",
+  "data": {
+      "id": "DQ-001",
+      "description": "Issue PLAT-402 is missing an Original Estimate.",
+      "resolutionStatus": "Open"
+  },
+  "metadata": {}
+}
+```
+---
+## PATCH /api/v1/admin/data-quality-issues/{id}/resolve
+### Purpose
+Resolves or ignores a data quality issue after external remediation.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Request Body
+```json
+{
+  "resolutionStatus": "Ignored"
+}
+```
+---
+### Validation Rules
+- resolutionStatus must be Resolved or Ignored.
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Issue resolved.",
+  "data": {
+    "resolutionStatus": "Ignored"
+  },
+  "metadata": {}
+}
+```
+---
+# Background Job APIs
+Background Job APIs manage automated synchronization runs and their execution history.
+---
+## GET /api/v1/admin/background-jobs
+### Purpose
+Returns the execution history of scheduled background jobs.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Query Parameters
+| Parameter | Description |
+|-----------|-------------|
+| page | Pagination index |
+| pageSize | Number of records per page |
+| status | Filter by Scheduled, Running, Completed, Failed |
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Background jobs retrieved successfully.",
+  "data": [
+    {
+      "id": "JOB-001",
+      "jobType": "Jira Sync",
+      "triggerSource": "Scheduled",
+      "status": "Completed",
+      "startedAt": "2026-08-12T02:00:00Z"
+    }
+  ],
+  "metadata": {
+    "count": 1
+  }
+}
+```
+---
+## GET /api/v1/admin/background-jobs/{id}
+### Purpose
+Retrieves detailed execution logs and results for a specific job.
+---
+### Authorization
+Platform Admin
+---
+### Path Parameters
+| Parameter | Description |
+|-----------|-------------|
+| id | Background Job Identifier |
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Job details retrieved.",
+  "data": {
+      "id": "JOB-001",
+      "status": "Completed",
+      "recordsProcessed": 1205,
+      "recordsFailed": 5,
+      "failureReason": null
+  },
+  "metadata": {}
+}
+```
+---
+## POST /api/v1/admin/background-jobs/jira-sync
+### Purpose
+Manually triggers a Jira synchronization operation.
+This API overrides the scheduled synchronization sequence and creates a manual Background Job Execution.
+---
+### Authentication
+Required
+---
+### Authorization
+Platform Admin
+---
+### Request Body
+No request body is required.
+---
+### Success Response
+```json
+{
+  "success": true,
+  "message": "Jira synchronization triggered.",
+  "data": {
+    "jobId": "JOB-002",
+    "status": "Running"
+  },
+  "metadata": {}
+}
+```
 ---
 # Settings APIs
 Application configuration is managed outside the application.
@@ -1691,15 +1954,21 @@ Leadership
 ```
 ---
 # Authorization Rules
-| Endpoint | Delivery Manager | Leadership |
-|----------|------------------|------------|
-| GET /notifications | ✓ | ✓ |
-| GET /notifications/{id} | Own Notifications | Own Notifications |
-| PATCH /notifications/{id}/read | Own Notifications | Own Notifications |
-| GET /settings | ✓ | ✓ |
-| GET /system/health | ✓ | ✓ |
-| GET /system/integrations | ✗ | ✓ |
-| GET /system/version | ✓ | ✓ |
+| Endpoint | Delivery Manager | Leadership | Platform Admin |
+|----------|------------------|------------|----------------|
+| GET /admin/jira-config | ✗ | ✗ | ✓ |
+| PUT /admin/jira-config | ✗ | ✗ | ✓ |
+| POST /admin/jira-config/test | ✗ | ✗ | ✓ |
+| GET /admin/identity-mappings | ✗ | ✗ | ✓ |
+| PATCH /admin/identity-mappings/{id} | ✗ | ✗ | ✓ |
+| GET /admin/data-quality-issues | ✗ | ✗ | ✓ |
+| PATCH /admin/data-quality-issues/{id}/resolve | ✗ | ✗ | ✓ |
+| GET /admin/background-jobs | ✗ | ✗ | ✓ |
+| POST /admin/background-jobs/jira-sync | ✗ | ✗ | ✓ |
+| GET /settings | ✓ | ✓ | ✓ |
+| GET /system/health | ✓ | ✓ | ✓ |
+| GET /system/integrations | ✗ | ✓ | ✓ |
+| GET /system/version | ✓ | ✓ | ✓ |
 All requests require:
 1. Valid Microsoft Entra ID access token.
 2. Backend RBAC validation.
@@ -1873,7 +2142,6 @@ Future enhancements may include:
 - Event-driven processing
 - Background analytics scheduling
 - Microsoft Teams integration
-- Email notification service
 - Additional data source integrations
 - Independent microservice deployment
 These enhancements can be introduced without changing the public API structure.
@@ -1889,7 +2157,7 @@ The API surface of the application consists of the following logical modules.
 | Dashboard | Aggregated dashboard data |
 | Analytics | Detailed workforce metrics |
 | Copilot | Natural language interaction |
-| Notifications | Workforce notifications |
+| Admin | Platform administration & data quality |
 | Settings | Application configuration |
 | System | Operational monitoring |
 Together, these APIs provide all functionality required to support the POC while maintaining clear separation of concerns and a scalable architecture.

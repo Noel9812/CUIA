@@ -83,15 +83,16 @@ This document applies to the Proof of Concept implementation of the Capacity & U
 The scope of the system includes:
 
 - User authentication
+- Platform administration and Jira configuration
 - Workforce data synchronization from Jira
-- Leave data upload
-- Skill mapping upload
+- Data quality management and unmapped user resolution
+- Leave data upload (CSV only)
+- Skill mapping upload (CSV only)
 - Workforce analytics generation
 - Capacity forecasting
 - Recommendation generation
 - Dashboard presentation
 - AI Copilot interaction
-- Daily summary generation
 
 The Proof of Concept is designed as a single-tenant application intended to demonstrate workforce intelligence capabilities within a single engineering organization.
 
@@ -226,6 +227,14 @@ All responses are generated using previously calculated analytics.
 
 ---
 
+## Data Quality & Administration
+
+The system provides tools for Platform Administrators to govern the application.
+
+Administrators configure Jira connections, upload CSV datasets, map user identities, and resolve data quality warnings to ensure accurate analytics generation.
+
+---
+
 # 7. Functional Modules
 
 The application is organized into a collection of logical functional modules.
@@ -254,8 +263,8 @@ Responsible for collecting organizational data from supported sources.
 Responsibilities include:
 
 - Jira synchronization
-- Leave data import
-- Skill mapping import
+- Leave data import (CSV)
+- Skill mapping import (CSV)
 - Data validation
 
 ---
@@ -307,14 +316,17 @@ Capabilities include:
 
 ---
 
-## Notification Module
+## Platform Administration Module
 
-Responsible for generating workforce summary notifications.
+Responsible for system configuration and data governance.
 
-Notification channels supported within the Proof of Concept include:
+Capabilities include:
 
-- Dashboard notifications
-- Email notifications
+- Jira integration configuration
+- Data Quality Dashboard (unmapped users, missing data)
+- Team and user management
+- Functional permissions assignment
+- Audit log viewing
 
 ---
 
@@ -344,82 +356,43 @@ Authenticate users securely before granting access to the application.
 
 ---
 
-## Description
+## Feature Definition
 
-The system shall use Microsoft Entra ID as the authentication provider.
+**Trigger:** Unauthenticated user attempts to access any application route, or clicks "Sign In".
 
-After successful authentication, the backend shall validate the received access token, identify the user, determine the user's application role, and establish an authenticated session.
+**Preconditions:** The application is registered with Microsoft Entra ID.
 
-Only authenticated users shall be permitted to access application functionality.
+**User Actions:**
+1. User navigates to the application.
+2. User clicks "Sign in with Microsoft".
+3. User authenticates via the Microsoft Entra ID portal.
 
----
+**System Actions:**
+1. System redirects unauthenticated users to Microsoft Entra ID.
+2. System receives the JWT access token upon successful Entra ID login.
+3. System extracts the user identity from the token.
+4. System resolves the user's assigned application role (Platform Admin, Delivery Manager, or Leadership).
+5. System creates an authenticated application session.
 
-## Functional Behaviour
+**Functional Validations:**
+- Token must not be expired.
+- Token issuer must match the configured Entra ID tenant.
+- Token audience must match the application client ID.
 
-The system shall:
+**Success Response:**
+- User session is established.
+- System redirects user to their role-specific landing dashboard (Platform Dashboard, Team Dashboard, or Executive Dashboard).
 
-- Redirect unauthenticated users to Microsoft Entra ID.
-- Validate the returned JWT access token.
-- Retrieve authenticated user information.
-- Resolve the user's application role.
-- Create an authenticated application session.
-- Redirect the user to the appropriate dashboard.
+**Failure Response:**
+- If validation fails, system denies access.
+- System displays an "Authentication Failed" message.
+- User is returned to the login screen.
 
----
+**Permissions:**
+- All users (Public access to login route).
 
-## Inputs
-
-- Microsoft Entra ID Access Token
-
----
-
-## Processing
-
-The system shall:
-
-1. Validate the access token.
-2. Verify token expiration.
-3. Verify token issuer.
-4. Verify audience.
-5. Extract user identity.
-6. Resolve application role.
-7. Create authenticated session.
-
----
-
-## Outputs
-
-- Authenticated session
-- User profile
-- User role
-- Dashboard access
-
----
-
-## User Interaction
-
-The user clicks **Sign in with Microsoft**.
-
-Upon successful authentication, the user is redirected into the application.
-
----
-
-## Functional Constraints
-
-- Anonymous access is not permitted.
-- Authentication must occur before any application functionality is accessed.
-- Authorization is performed by the backend.
-
----
-
-## Acceptance Criteria
-
-The module is considered complete when:
-
-- Users can authenticate successfully.
-- Invalid tokens are rejected.
-- Expired tokens are rejected.
-- Authorized users are redirected appropriately.
+**Postconditions:**
+- The user's role is stored in the session for subsequent functional authorization checks.
 
 ---
 
@@ -427,89 +400,65 @@ The module is considered complete when:
 
 ## Purpose
 
-Retrieve operational engineering data from Jira.
+Retrieve operational engineering data from Jira via automated background jobs or manual triggers.
 
 ---
 
-## Description
+## Feature Definition
 
-The system shall connect to Jira using configured credentials and retrieve engineering project information required for workforce analytics.
+**Trigger:** 
+- Automated: A daily cron background job triggers at a configured time.
+- Manual: A Platform Administrator clicks "Trigger Sync" on the Platform Dashboard.
 
-The synchronization process may be initiated manually during the POC.
+**Preconditions:**
+- Jira connection is successfully configured and tested.
+- Valid API credentials exist.
 
----
+**User Actions (Manual):**
+1. Admin navigates to Platform Dashboard.
+2. Admin clicks "Trigger Sync".
 
-## Functional Behaviour
+**System Actions:**
+1. System transitions Sync State to `Running`.
+2. System connects to the Jira Cloud API using configured credentials.
+3. System paginates through configured Jira projects, retrieving Issues, Assignees, Estimates, Worklogs, and Sprint Information.
+4. System validates retrieved records (e.g., checking for required fields like Issue ID).
+5. System normalizes and stores the data.
+6. System identifies unmapped users (Jira users not mapped to Entra ID records) and flags them for the Data Quality Dashboard.
+7. System transitions Sync State to `Completed` or `Completed with Warnings`.
 
-The system shall retrieve:
+**Functional Validations:**
+- Connection must succeed within 30 seconds or timeout.
+- Issues must have an ID and an assignee. Issues lacking an assignee are flagged but imported.
+- Failed individual issue records do not halt the overall synchronization (Graceful Degradation).
 
-- Projects
-- Issues
-- Assignees
-- Status
-- Priorities
-- Story Points
-- Original Estimates
-- Remaining Estimates
-- Worklogs
-- Sprint Information
-- Resolution Dates
-- Labels
-- Components
+**Success Response:**
+- Sync State is updated to `Completed`.
+- Last Sync Timestamp is updated.
+- Analytics generation is triggered automatically if sync completed successfully.
 
----
+**Failure Response:**
+- Sync State is updated to `Failed`.
+- Error is written to Audit Logs.
+- Previous analytics snapshot remains active. Analytics generation is skipped.
 
-## Inputs
+**Permissions:**
+- Automated: System level execution.
+- Manual Trigger: Platform Administrator only.
 
-- Jira Project Configuration
-- Jira API Credentials
-
----
-
-## Processing
-
-The system shall:
-
-1. Connect to Jira.
-2. Retrieve configured project data.
-3. Validate retrieved records.
-4. Normalize the data.
-5. Store synchronized data.
-6. Report synchronization status.
-
----
-
-## Outputs
-
-- Imported Jira data
-- Synchronization summary
-- Synchronization timestamp
+**Postconditions:**
+- Updated operational data is available for Analytics Module processing.
+- Unmapped users are populated in the Data Quality Dashboard.
 
 ---
 
-## User Interaction
+## Functional State Behaviour: Synchronization
 
-Users may initiate synchronization from the application.
-
-Progress and completion status shall be displayed.
-
----
-
-## Functional Constraints
-
-- Only configured Jira projects shall be synchronized.
-- Failed records shall not interrupt the entire synchronization process.
-- Synchronization results shall be logged.
-
----
-
-## Acceptance Criteria
-
-The module is complete when:
-
-- Jira data is successfully imported.
-- Invalid records are handled gracefully.
-- Synchronization summary is displayed.
+- **Idle:** Waiting for the next scheduled cron job or manual trigger.
+- **Running:** Fetching data from Jira. UI displays a progress indicator.
+- **Completed:** Successfully fetched all data with no severe data quality issues.
+- **Completed with Warnings:** Fetched data, but flagged missing required fields or unmapped users.
+- **Failed:** Could not connect to Jira or authenticate. Halts pipeline.
 
 ---
 
@@ -517,86 +466,61 @@ The module is complete when:
 
 ## Purpose
 
-Import employee leave information for capacity calculations.
+Import employee leave information for capacity calculations via CSV upload.
 
 ---
 
-## Description
+## Feature Definition
 
-The system shall support manual upload of leave datasets in CSV and Microsoft Excel formats.
+**Trigger:** Platform Administrator selects a CSV file and clicks "Upload Leave Data".
 
-Uploaded information shall be validated before being included in workforce analytics.
+**Preconditions:** 
+- User is logged in as Platform Administrator.
+- File is formatted as a CSV.
 
----
+**User Actions:**
+1. Administrator navigates to Data Quality / Uploads Dashboard.
+2. Administrator selects a CSV file.
+3. Administrator clicks "Upload".
 
-## Functional Behaviour
+**System Actions:**
+1. System transitions Upload State to `Validating`.
+2. System parses the CSV file.
+3. System validates mandatory columns and row data types.
+4. System transitions Upload State to `Processing`.
+5. System overwrites existing leave records for the dates provided (or appends new ones).
+6. System transitions Upload State to `Completed` or `Completed with Errors`.
 
-The system shall:
+**Functional Validations:**
+- **File Type:** Must be `.csv`. Unsupported formats (e.g., Excel, PDF) are immediately rejected with "Unsupported file type. Please upload a CSV."
+- **Empty Files:** Rejected with "File is empty."
+- **Required Columns:** Must contain `Employee Email`, `Leave Start Date`, `Leave End Date`, `Leave Type`. Missing columns reject the entire file.
+- **Row Validation:** Dates must be valid ISO-8601. Invalid rows are skipped, and the validation error is reported in the summary.
+- **Duplicate Rows:** Ignored (first instance processed, subsequent identical rows skipped).
 
-- Accept CSV files.
-- Accept Excel files.
-- Validate file structure.
-- Validate required fields.
-- Reject invalid records.
-- Store validated leave information.
+**Success Response:**
+- UI displays a summary: "Imported X records. Rejected Y records."
+- Valid records are committed to the database.
 
----
+**Failure Response:**
+- If file-level validation fails, the entire upload is rejected and UI displays the error reason.
 
-## Inputs
+**Permissions:**
+- Platform Administrator only.
 
-Required fields:
-
-- Employee Name
-- Leave Start Date
-- Leave End Date
-- Leave Type
-
----
-
-## Processing
-
-The system shall:
-
-1. Validate uploaded file.
-2. Parse file contents.
-3. Validate mandatory fields.
-4. Validate date formats.
-5. Reject invalid rows.
-6. Store valid records.
+**Postconditions:**
+- Leave data is updated and will be used in the next Analytics run.
 
 ---
 
-## Outputs
+## Functional State Behaviour: Uploads
 
-- Upload summary
-- Imported records
-- Validation report
-
----
-
-## User Interaction
-
-Users upload the dataset using the application interface.
-
-Validation results are displayed after processing.
-
----
-
-## Functional Constraints
-
-- Only supported file formats are accepted.
-- Required fields cannot be empty.
-- Invalid rows shall not prevent valid rows from being imported.
-
----
-
-## Acceptance Criteria
-
-The module is complete when:
-
-- Valid datasets are imported successfully.
-- Invalid records are reported clearly.
-- Imported leave data is available for analytics.
+- **Waiting:** UI is idle, awaiting file selection.
+- **Validating:** System is parsing the CSV structure and headers.
+- **Processing:** System is validating individual rows and saving valid records.
+- **Completed:** All valid rows saved successfully.
+- **Completed with Errors:** Some rows saved, but some were skipped due to invalid data. UI shows error report.
+- **Failed:** Entire file rejected (e.g., wrong format, missing headers).
 
 ---
 
@@ -604,81 +528,49 @@ The module is complete when:
 
 ## Purpose
 
-Import workforce skill information.
+Import workforce skill information via CSV upload.
 
 ---
 
-## Description
+## Feature Definition
 
-The system shall support manual upload of employee skill mappings.
+**Trigger:** Platform Administrator selects a CSV file and clicks "Upload Skill Mapping".
 
-Skill information shall be used for dependency analysis and future recommendations.
+**Preconditions:** 
+- User is logged in as Platform Administrator.
+- File is formatted as a CSV.
 
----
+**User Actions:**
+1. Administrator navigates to Data Quality / Uploads Dashboard.
+2. Administrator selects a CSV file.
+3. Administrator clicks "Upload".
 
-## Functional Behaviour
+**System Actions:**
+1. System transitions Upload State to `Validating`.
+2. System parses the CSV file.
+3. System validates mandatory columns and row data types.
+4. System transitions Upload State to `Processing`.
+5. System completely overwrites existing skill mappings for the mapped users with the new dataset.
+6. System transitions Upload State to `Completed`.
 
-The system shall:
+**Functional Validations:**
+- **File Type:** Must be `.csv`. Unsupported formats (e.g., Excel) are strictly rejected.
+- **Empty Files:** Rejected with "File is empty."
+- **Required Columns:** Must contain `Employee Email` and `Skill`. Missing columns reject the file.
+- **Duplicate Rows:** Ignored (first processed, duplicates skipped).
+- **Invalid Employee IDs:** If the email does not map to a known user, the row is flagged as an "Unmapped User" and sent to the Data Quality Dashboard, but the mapping is saved in a pending state.
 
-- Accept CSV files.
-- Accept Excel files.
-- Validate uploaded data.
-- Store employee skill mappings.
+**Success Response:**
+- UI displays upload summary (records imported vs. rejected).
 
----
+**Failure Response:**
+- File-level rejections return an immediate error message.
 
-## Inputs
+**Permissions:**
+- Platform Administrator only.
 
-Required fields:
-
-- Employee
-- Skill
-
-Optional fields may include:
-
-- Skill Level
-- Certification
-
----
-
-## Processing
-
-The system shall:
-
-1. Validate uploaded dataset.
-2. Parse employee information.
-3. Associate skills with employees.
-4. Store validated mappings.
-
----
-
-## Outputs
-
-- Upload summary
-- Imported skills
-- Validation report
-
----
-
-## User Interaction
-
-Users upload skill datasets through the application interface.
-
----
-
-## Functional Constraints
-
-Duplicate employee-skill mappings shall not be stored.
-
----
-
-## Acceptance Criteria
-
-The module is complete when:
-
-- Valid skills are imported.
-- Invalid records are rejected.
-- Skill information becomes available for analytics.
+**Postconditions:**
+- Skill mappings are updated for analytics and AI Copilot use.
 
 ---
 
@@ -686,84 +578,53 @@ The module is complete when:
 
 ## Purpose
 
-Generate deterministic workforce metrics.
+Generate deterministic workforce metrics using synchronized data.
 
 ---
 
-## Description
+## Feature Definition
 
-The analytics engine transforms synchronized workforce information into actionable engineering metrics.
+**Trigger:** Automatically triggered after a successful Jira Synchronization, or manually triggered by Platform Admin.
 
-Business calculations shall be deterministic and shall not rely on AI models.
+**Preconditions:** 
+- Jira Sync completed successfully.
 
----
+**System Actions:**
+1. System transitions Analytics State to `Running`.
+2. System validates available datasets.
+3. System calculates Utilization, Workload, Productivity, Estimation Accuracy, Capacity, and Capacity Forecasts.
+4. System identifies operational observations for the Recommendation Engine.
+5. System saves the generated metrics as an immutable Analytics Snapshot.
+6. System transitions Analytics State to `Available`.
 
-## Functional Behaviour
+**Functional Validations & Graceful Degradation:**
+- Analytics **do not stop** when incomplete data exists.
+- The system validates only the required fields for each specific calculation module.
+- Invalid records (e.g., an issue with a missing estimate) are excluded *only* from affected calculations (e.g., estimation accuracy), while remaining analytics continue normally.
+- Excluded records are logged and reported to the Data Quality Dashboard.
 
-The system shall generate:
+**Success Response:**
+- Analytics State changes to `Available`.
+- Dashboards are updated to use the latest successful analytics snapshot.
 
-- Utilization
-- Workload
-- Productivity
-- Estimation Accuracy
-- Capacity
-- Capacity Forecasts
+**Failure Response:**
+- If a catastrophic failure occurs (e.g., database connection loss), Analytics State transitions to `Failed`.
+- Dashboards continue to display the *previous* successful analytics snapshot.
 
-The analytics engine shall execute after successful data synchronization.
+**Permissions:**
+- System-level execution.
 
----
-
-## Inputs
-
-- Jira Data
-- Leave Data
-- Skill Data
-
----
-
-## Processing
-
-The system shall:
-
-1. Validate available datasets.
-2. Generate workforce metrics.
-3. Identify operational observations.
-4. Store generated analytics.
+**Postconditions:**
+- Fresh workforce metrics are available for Dashboards and the AI Copilot.
 
 ---
 
-## Outputs
+## Functional State Behaviour: Analytics
 
-- Workforce metrics
-- Capacity analysis
-- Trend analysis
-- Forecast data
-
----
-
-## User Interaction
-
-Users view generated analytics through dashboards.
-
-Analytics generation itself does not require direct interaction.
-
----
-
-## Functional Constraints
-
-Analytics shall only use validated organizational data.
-
-Calculations shall follow documented business rules.
-
----
-
-## Acceptance Criteria
-
-The module is complete when:
-
-- Analytics are generated successfully.
-- Metrics match defined business formulas.
-- Results are available to dashboards.
+- **Pending:** Waiting for sync to complete.
+- **Running:** Deterministic formulas are executing.
+- **Snapshot Generated:** Results are saved to the database.
+- **Available:** Snapshots are ready for dashboard consumption.
 
 ---
 
@@ -775,74 +636,34 @@ Transform workforce analytics into actionable recommendations.
 
 ---
 
-## Description
+## Feature Definition
 
-The recommendation engine evaluates workforce metrics and generates guidance that supports engineering management decisions.
+**Trigger:** Automatically triggered immediately after the Analytics Module reaches `Available` state.
 
-Recommendations are generated only after analytics have been completed.
+**Preconditions:** 
+- A valid Analytics Snapshot exists.
 
----
+**System Actions:**
+1. System evaluates the Analytics Snapshot against predefined risk thresholds.
+2. System detects predefined conditions (e.g., utilization > 120%).
+3. System generates specific, actionable business recommendations.
+4. System associates recommendations with specific teams or users.
 
-## Functional Behaviour
+**Functional Validations:**
+- System verifies that recommendations are derived *only* from the current Analytics Snapshot.
 
-The system shall identify:
+**Success Response:**
+- Recommendations are saved and linked to the snapshot.
 
-- Capacity risks
-- Workload imbalance
-- Knowledge concentration
-- Underutilization
-- Overutilization
-- Estimation concerns
+**Failure Response:**
+- If recommendation generation fails, the system logs the error. Dashboards display analytics without new recommendations.
 
-The system shall generate corresponding recommendations.
+**Permissions:**
+- System-level execution.
+- Delivery Managers and Leadership can view generated recommendations.
 
----
-
-## Inputs
-
-- Workforce Analytics
-- Capacity Analysis
-- Forecast Results
-
----
-
-## Processing
-
-The system shall:
-
-1. Evaluate workforce metrics.
-2. Detect predefined conditions.
-3. Generate recommendations.
-4. Associate recommendations with identified observations.
-
----
-
-## Outputs
-
-- Workforce recommendations
-- Risk observations
-- Suggested management actions
-
----
-
-## User Interaction
-
-Recommendations are displayed within dashboards and referenced by the AI Copilot.
-
----
-
-## Functional Constraints
-
-Recommendations shall be based only on generated analytics.
-
----
-
-## Acceptance Criteria
-
-The module is complete when:
-
-- Recommendations correspond to identified workforce conditions.
-- Recommendations are understandable and actionable.
+**Postconditions:**
+- Recommendations are available in dashboards.
 
 ---
 
@@ -850,65 +671,45 @@ The module is complete when:
 
 ## Purpose
 
-Present workforce intelligence through role-specific dashboards.
+Present workforce intelligence through role-specific views.
 
 ---
 
-## Description
+## Feature Definition
 
-The system shall provide dashboards that summarize workforce health and operational insights.
+**Trigger:** User navigates to a Dashboard route.
 
-Dashboard content shall vary based on the authenticated user's role.
+**Preconditions:** 
+- User is authenticated and authorized.
+- At least one Analytics Snapshot exists.
 
----
+**User Actions:**
+1. User clicks on dashboard tabs (Executive, Team, Forecast, Platform).
+2. User filters data (e.g., by sprint or date range).
 
-## Functional Behaviour
+**System Actions:**
+1. System reads the authenticated user's assigned role.
+2. System retrieves the latest `Available` Analytics Snapshot.
+3. System filters the data to include only the user's authorized scope (e.g., a Delivery Manager's specific assigned team).
+4. System renders the visual metrics.
 
-The system shall provide:
+**Functional Validations:**
+- System strictly validates the user's role before returning dashboard data.
+- If no Analytics Snapshot exists, system returns an "Awaiting Initial Sync" empty state.
 
-- Executive Dashboard
-- Team Dashboard
-- Forecast Dashboard
+**Success Response:**
+- Dashboard renders accurately.
 
-Each dashboard shall display only authorized information.
+**Failure Response:**
+- If user requests unauthorized data, system returns 403 Forbidden.
 
----
+**Permissions:**
+- **Platform Administrator:** Views Platform Dashboard (System health, data quality).
+- **Delivery Manager:** Views Team Dashboard (Assigned teams only).
+- **Leadership:** Views Executive Dashboard and Forecast Dashboard (Organization-wide).
 
-## Inputs
-
-- Workforce Analytics
-- Recommendations
-- Forecast Data
-
----
-
-## Processing
-
-The system retrieves the latest analytics and presents them in dashboard-specific views.
-
----
-
-## Outputs
-
-Visual dashboards displaying workforce intelligence.
-
----
-
-## User Interaction
-
-Users navigate between dashboards and review workforce insights.
-
----
-
-## Functional Constraints
-
-Dashboard data shall respect authorization rules.
-
----
-
-## Acceptance Criteria
-
-The module is complete when dashboards accurately present current workforce analytics.
+**Postconditions:**
+- User views insights.
 
 ---
 
@@ -920,138 +721,105 @@ Provide conversational interaction with workforce intelligence.
 
 ---
 
-## Description
+## Feature Definition
 
-The AI Copilot enables users to ask questions using natural language.
+**Trigger:** User submits a natural language query in the Copilot chat interface.
 
-The Copilot interprets the user's request, retrieves the relevant analytics, and generates an understandable response.
+**Preconditions:** 
+- User is authenticated.
+- A valid Analytics Snapshot exists.
 
----
+**User Actions:**
+1. User types a question (e.g., "Who is overloaded?") and clicks Send.
 
-## Functional Behaviour
+**System Actions:**
+1. System receives the query and validates the user's authorized scope.
+2. System retrieves the relevant context from the latest Analytics Snapshot, strictly filtered by the user's role.
+3. System constructs a prompt including the user's query and the deterministic analytical data.
+4. System queries the selected LLM provider (LangGraph orchestration).
+5. System streams the response back to the user interface.
 
-The system shall support questions related to:
+**Functional Validations:**
+- System rejects queries attempting to access out-of-scope team data.
+- System validates that the LLM response relies only on the provided context (AI only orchestrates and explains).
 
-- Utilization
-- Workload
-- Productivity
-- Capacity
-- Forecasts
-- Recommendations
+**Success Response:**
+- LLM response is displayed in the chat interface.
 
-The AI shall explain results but shall not calculate workforce metrics.
+**Failure Response:**
+- If the LLM provider times out or returns an error, system displays: "AI Copilot is currently unavailable. Please refer to the dashboards for analytics."
 
----
+**Permissions:**
+- Delivery Manager and Leadership roles.
 
-## Inputs
-
-- User Question
-- Authorized Workforce Analytics
-
----
-
-## Processing
-
-The system shall:
-
-1. Validate user authorization.
-2. Interpret the question.
-3. Retrieve relevant analytics.
-4. Generate a response.
-5. Return the response to the user.
+**Postconditions:**
+- Conversation history is updated in the current session.
 
 ---
 
-## Outputs
-
-- AI-generated explanation
-- Workforce summary
-- Recommendations
-
----
-
-## User Interaction
-
-Users communicate with the Copilot using natural language.
-
----
-
-## Functional Constraints
-
-The AI shall only access authorized analytical data.
-
----
-
-## Acceptance Criteria
-
-The module is complete when users receive accurate, context-aware responses based on available analytics.
-
----
-
-# 8.9 Notification Module
+# 8.9 Platform Administration Module
 
 ## Purpose
 
-Provide proactive workforce summaries.
+Provide functional configuration, Jira integration setup, and Data Quality management.
 
 ---
 
-## Description
+## Feature Definition: Jira Configuration
 
-The system shall generate periodic workforce summaries for managers and leadership.
+**Trigger:** Platform Admin navigates to Configuration and enters Jira details.
 
-For the POC, notifications shall be delivered through the application and email.
+**Preconditions:** Logged in as Platform Admin.
 
----
+**User Actions:**
+1. Admin enters Jira URL, API Key, and Email.
+2. Admin clicks "Test Connection".
+3. Admin clicks "Save Configuration".
 
-## Functional Behaviour
+**System Actions:**
+1. On "Test Connection", system makes a ping request to the Jira API to validate credentials.
+2. On "Save", system encrypts and stores the credentials.
 
-The system shall generate summaries including:
+**Functional Validations:**
+- URL must be a valid format.
+- API Key and Email cannot be empty.
+- Connection test must return 200 OK from Jira.
 
-- Team utilization
-- Capacity
-- Risks
-- Recommendations
+**Success Response:**
+- "Connection Successful" banner displayed. Details saved.
 
----
-
-## Inputs
-
-- Workforce Analytics
-- Recommendations
-
----
-
-## Processing
-
-The system compiles workforce summaries using the latest available analytics.
+**Failure Response:**
+- "Invalid Credentials" or "Connection Timeout" banner displayed. Configuration not saved.
 
 ---
 
-## Outputs
+## Feature Definition: Data Quality Dashboard
 
-- Dashboard notification
-- Email summary
+**Trigger:** Platform Admin navigates to the Data Quality Dashboard.
 
----
+**Preconditions:** Logged in as Platform Admin.
 
-## User Interaction
+**User Actions:**
+1. Admin views list of "Unmapped Users" (users found in Jira but not in Entra ID/CSV).
+2. Admin views list of "Excluded Records" (Jira issues skipped due to missing estimates/assignees).
+3. Admin resolves an unmapped user by uploading a corrected Skill Mapping CSV.
 
-Users review generated notifications.
+**System Actions:**
+1. System queries the database for all synchronization warnings and unmapped identities.
+2. System displays the data in a tabular format.
+3. Upon CSV upload, system re-runs identity mapping logic and clears resolved warnings.
 
-No user input is required.
+**Functional Validations:**
+- System clearly identifies which specific fields are missing for excluded records (e.g., "Missing Original Estimate").
 
----
+**Success Response:**
+- Dashboard accurately reflects the health of the synced data.
 
-## Functional Constraints
+**Permissions:**
+- Platform Administrator exclusively.
 
-Notifications shall only contain information that the recipient is authorized to view.
-
----
-
-## Acceptance Criteria
-
-The module is complete when workforce summaries are generated successfully and delivered through supported notification channels.
+**Postconditions:**
+- Data quality gaps are identified and resolved, improving the accuracy of the next analytics run.
 
 ---
 
@@ -1075,13 +843,13 @@ All authorization decisions shall be enforced by the backend.
 
 ## 9.2 Data Synchronization Rules
 
-The system shall synchronize workforce data only from configured Jira projects.
+The system shall synchronize workforce data only from configured Jira projects via daily background jobs or manual triggers.
 
 Analytics shall only use successfully synchronized data.
 
-If synchronization is incomplete or unsuccessful, the system shall notify the user and prevent analytics generation until valid data is available.
+If synchronization is partially incomplete, the system shall follow graceful degradation: analytics validate only required fields for each module. Invalid records are excluded only from affected calculations while remaining analytics continue.
 
-The system shall maintain the timestamp of the latest successful synchronization.
+The Data Quality Dashboard shall report any excluded records or unmapped users.
 
 ---
 
@@ -1113,7 +881,7 @@ Business metrics shall always be calculated using deterministic logic.
 
 The AI model shall never calculate workforce metrics.
 
-Generated analytics shall remain read-only until new data is synchronized.
+Generated analytics shall remain read-only until new data is synchronized. Dashboards shall always use the latest successful analytics snapshot.
 
 ---
 
@@ -1144,14 +912,6 @@ The AI Copilot shall only use authorized workforce analytics when generating res
 The Copilot shall explain analytical findings but shall not generate independent business calculations.
 
 Responses shall not expose information outside the authenticated user's authorized scope.
-
----
-
-## 9.9 Notification Rules
-
-Notifications shall summarize the latest available workforce analytics.
-
-Notification content shall respect user authorization and shall not expose unauthorized information.
 
 ---
 
@@ -1192,32 +952,33 @@ Records with missing mandatory information shall be excluded from analytical pro
 
 ## 10.3 Leave Dataset Validation
 
-Uploaded leave datasets shall be validated before import.
+Uploaded leave datasets shall be strictly validated before import.
 
 Validation includes:
 
-- Supported file format
-- Required columns
-- Valid employee identifier
-- Valid date values
-- Logical date ranges
+- **File Format:** Must be `.csv`. Unsupported formats (e.g., Excel) are strictly rejected.
+- **Empty Files:** Rejected immediately.
+- **Required Columns:** Must contain `Employee Email`, `Leave Start Date`, `Leave End Date`, `Leave Type`. Missing columns reject the entire file.
+- **Data Types:** Dates must be valid formats (e.g., ISO-8601).
+- **Duplicate Rows:** The system ignores duplicate exact matches.
+- **Conflict Resolution:** New valid rows overwrite existing overlapping leave data for that employee.
 
-Rows failing validation shall be reported to the user.
+Rows failing validation are skipped, and the failure reasons are reported to the user in the upload summary.
 
 ---
 
 ## 10.4 Skill Dataset Validation
 
-Skill mapping uploads shall be validated before processing.
+Skill mapping uploads shall be strictly validated before processing.
 
 Validation includes:
 
-- Supported file format
-- Required columns
-- Employee identifier
-- Skill value
+- **File Format:** Must be `.csv`. Unsupported formats (e.g., Excel) are strictly rejected.
+- **Required Columns:** Must contain `Employee Email` and `Skill`. Missing columns reject the entire file.
+- **Duplicate Rows:** Ignored (first processed, duplicates skipped).
+- **Conflict Resolution:** The system completely overwrites existing skill mappings for the mapped users with the new dataset.
 
-Duplicate mappings shall be ignored or consolidated according to system behaviour.
+If the employee email does not map to a known user, the system flags an "Unmapped User" warning in the Data Quality Dashboard but retains the pending mapping.
 
 ---
 
@@ -1292,21 +1053,6 @@ Responses shall remain within the user's authorized scope.
 
 ---
 
-## 11.5 Notification Outputs
-
-Daily summaries shall include an overview of workforce health.
-
-Notifications may contain:
-
-- Team utilization
-- Capacity summary
-- Key workforce risks
-- High-priority recommendations
-
-The content shall vary according to the recipient's role.
-
----
-
 ## 11.6 Synchronization Outputs
 
 After every synchronization, the system shall provide:
@@ -1376,14 +1122,16 @@ Unauthorized requests shall not reveal sensitive organizational data.
 
 # 12.3 Jira Synchronization Errors
 
-If Jira synchronization cannot be completed successfully, the system shall:
+If a complete Jira synchronization failure occurs (e.g., authentication timeout), the system shall:
 
-- Notify the user that synchronization failed.
+- Log the synchronization failure.
 - Preserve previously synchronized data.
-- Prevent analytics generation using incomplete datasets.
-- Allow synchronization to be attempted again.
+- Skip new analytics generation, leaving the previous Analytics Snapshot active.
 
-Partial synchronization failures shall be reported without terminating the entire synchronization process whenever possible.
+For partial synchronization failures (e.g., a few issues missing estimates), the system shall follow graceful degradation:
+- Continue the synchronization process.
+- Flag the invalid records in the Data Quality Dashboard.
+- Proceed to analytics generation, excluding only the affected records from specific calculations.
 
 ---
 
@@ -1417,15 +1165,16 @@ Validation results shall clearly indicate:
 
 # 12.6 Analytics Generation Errors
 
-The analytics engine shall execute only when the required datasets are available.
-
-If required information is missing, the system shall:
+If catastrophic data loss occurs (e.g., database unavailable), the system shall:
 
 - Skip analytics generation.
-- Inform the user that analytics could not be generated.
-- Identify the missing data source where applicable.
+- Ensure previously generated Analytics Snapshots remain available for dashboards.
 
-Previously generated analytics shall remain available until new analytics are successfully generated.
+If only partial required information is missing for specific records, the system shall:
+- Apply graceful degradation.
+- Exclude only the malformed records from their dependent calculations.
+- Continue generating all other analytics successfully.
+- Report excluded records to the Data Quality Dashboard.
 
 ---
 
@@ -1436,14 +1185,6 @@ If the AI service is temporarily unavailable, the system shall notify the user t
 The failure of the AI Copilot shall not prevent users from accessing dashboards or workforce analytics.
 
 The application shall continue to provide all deterministic analytical capabilities.
-
----
-
-# 12.8 Notification Errors
-
-If workforce summary notifications cannot be delivered, the system shall continue generating workforce analytics.
-
-Notification failures shall not interrupt any other application functionality.
 
 ---
 
@@ -1528,14 +1269,6 @@ The AI Copilot shall respond only to workforce-related questions supported by th
 Responses shall be generated using authorized analytical data.
 
 The Copilot shall not access raw organizational data outside the analytics generated by the system.
-
----
-
-## 13.8 Notification Behaviour
-
-Notifications shall summarize the most recent workforce analytics.
-
-Notification content shall reflect the recipient's role and authorization scope.
 
 ---
 
@@ -1648,112 +1381,7 @@ Errors shall be communicated clearly, operations shall remain traceable through 
 
 # 17. Non-Functional Requirements
 
-This section defines the quality attributes expected of the Capacity & Utilization Intelligence Agent (CUIA). These requirements describe how well the system should perform its intended functions rather than what functionality it provides.
-
----
-
-## 17.1 Performance
-
-The system shall provide an interactive user experience suitable for demonstration purposes.
-
-### Requirements
-
-- User authentication should complete within an acceptable duration under normal operating conditions.
-- Dashboard pages should display generated analytics without noticeable delay.
-- AI Copilot responses should be returned within a reasonable time based on the selected LLM provider.
-- Data synchronization shall execute without blocking the application's user interface.
-- File uploads shall provide progress feedback until processing is complete.
-
----
-
-## 17.2 Reliability
-
-The application shall operate consistently during normal usage.
-
-### Requirements
-
-- Successfully synchronized workforce data shall remain available until replaced by a newer synchronization.
-- Temporary failures in one module shall not unnecessarily affect unrelated modules.
-- The application shall recover gracefully from recoverable operational failures.
-- Invalid user input shall not cause unexpected application behaviour.
-
----
-
-## 17.3 Availability
-
-The application shall remain available to authorized users during demonstration and evaluation.
-
-### Requirements
-
-- Authentication shall be required before protected functionality is accessed.
-- Temporary unavailability of external services shall be communicated clearly to users.
-- Failure of optional components (such as AI services or email notifications) shall not prevent users from accessing dashboards or previously generated analytics.
-
----
-
-## 17.4 Security
-
-The system shall protect organizational information throughout all user interactions.
-
-### Requirements
-
-- All protected functionality shall require authentication.
-- Authorization shall be enforced by the backend.
-- Users shall only access information within their authorized scope.
-- Sensitive credentials shall not be exposed to users.
-- AI responses shall only use authorized analytical information.
-
-Detailed security design is documented separately in **SECURITY.md**.
-
----
-
-## 17.5 Scalability
-
-Although implemented as a Proof of Concept, the application shall support future expansion.
-
-### Requirements
-
-- Functional modules shall remain logically separated.
-- Business logic shall remain independent from presentation logic.
-- The application shall support migration to a microservice architecture without significant redesign.
-- Database structures shall be designed to support future multi-tenant expansion.
-
----
-
-## 17.6 Maintainability
-
-The application shall be designed for ease of future enhancement.
-
-### Requirements
-
-- Functional modules shall have clear responsibilities.
-- Business rules shall be centralized.
-- Analytical calculations shall remain separate from AI functionality.
-- Configuration values shall be externalized wherever practical.
-- Source code shall be organized consistently across the application.
-
----
-
-## 17.7 Usability
-
-The application shall be simple and intuitive for business users.
-
-### Requirements
-
-- Navigation shall be straightforward.
-- Dashboards shall emphasize business insights rather than raw operational data.
-- Error messages shall be understandable by non-technical users.
-- Users shall not require technical knowledge to interpret workforce analytics.
-
----
-
-## 17.8 Compatibility
-
-The application shall support modern desktop web browsers.
-
-The Proof of Concept is optimized for desktop usage.
-
-Mobile support is outside the scope of this release.
+*(Note: Content related to Scalability, Maintainability, Performance, Availability, and Microservice Migration has been formally relocated to **ARCHITECTURE.md** as per Baseline governance boundaries.)*
 
 ---
 
@@ -1830,12 +1458,6 @@ Recommendations shall be understandable, relevant, and actionable.
 
 ---
 
-## Notifications
-
-The application shall generate workforce summary notifications through the supported channels defined for the Proof of Concept.
-
----
-
 ## Security
 
 The application shall:
@@ -1849,17 +1471,7 @@ The application shall:
 
 # 19. External Dependencies
 
-The application depends upon several external systems and services.
-
-| Dependency | Purpose |
-|------------|---------|
-| Microsoft Entra ID | User Authentication |
-| Jira Cloud | Workforce operational data |
-| Gemini API or Azure OpenAI | AI Copilot responses |
-| PostgreSQL | Application data storage in every environment |
-| Email Service | Workforce summary notifications |
-
-Failure or unavailability of these services may affect the corresponding application functionality.
+*(Note: External dependency definitions and architectural integrations are documented in **ARCHITECTURE.md**.)*
 
 ---
 

@@ -94,7 +94,9 @@ CUIA Application
 |
 ├── Copilot Module
 |
-├── Notification Module
+├── Platform Administration Module
+|
+├── Background Processing Module
 |
 └── System Module
 ---
@@ -130,8 +132,9 @@ without requiring a complete redesign.
 Future extraction candidates:
 Analytics Service
 Copilot Service
-Notification Service
+Platform Administration Service
 Integration Service
+Background Processing Service
 ---
 # 2. Architecture Goals
 The architecture is designed around the following goals.
@@ -154,11 +157,11 @@ These are future considerations.
 # 2.2 Scalability
 Although the POC has limited scope, the architecture must support future growth.
 The system should allow:
-## Database Evolution
-Current:
-SQLite
+## Database Scaling
+Current POC:
+PostgreSQL (Single Instance)
 Future:
-PostgreSQL
+PostgreSQL (High Availability Cluster)
 ---
 ## Additional Integrations
 Future data sources:
@@ -391,7 +394,7 @@ The system follows a layered architecture.
           ↓
 +-----------------------------+
 | Database |
-| SQLite |
+| PostgreSQL |
 +-----------------------------+
 ---
 # Presentation Layer
@@ -441,9 +444,7 @@ Responsible for:
 - Persistence
 - Retrieval
 Technology:
-POC:
-SQLite
-Future:
+POC and Future:
 PostgreSQL
 ---
 # 5. Summary
@@ -511,7 +512,7 @@ The CUIA platform exists between organizational users and multiple enterprise da
                  /           |            \
                 v            v             v
          +-----------+   +-----------+   +-------------+
-         | Jira      |   | CSV/XLSX  |   | Microsoft   |
+         | Jira      |   | CSV       |   | Microsoft   |
          | Platform  |   | Uploads   |   | Entra ID    |
          +-----------+   +-----------+   +-------------+
                               |
@@ -534,7 +535,8 @@ The CUIA platform consists of the following major components.
 | Recommendation Engine | Risk identification and actions |
 | AI Copilot | Natural language interaction |
 | Database | Persistent storage |
-| Notification Engine | Proactive workforce summaries |
+| Platform Administration | System configuration and Data Quality management |
+| Background Processing | Automated synchronization scheduling |
 ---
 # 7. Frontend Architecture
 The frontend provides the user-facing interface for Delivery Managers and Leadership.
@@ -570,7 +572,7 @@ frontend/
 |
 ├── copilot/
 |
-├── notifications/
+├── admin/
 |
 ├── components/
 |
@@ -639,7 +641,9 @@ backend/
 |
 ├── copilot/
 |
-├── notifications/
+├── admin/
+|
+├── background_jobs/
 |
 ├── system/
 |
@@ -711,10 +715,16 @@ Analytics Engine
 Raw Data
 |
 v
-Data Cleaning
+Data Cleaning & Data Quality Validation
+| (Invalid data flagged to Data Quality component)
+v
+Graceful Degradation (Skip malformed records)
 |
 v
-Metric Calculation
+Normalization
+|
+v
+Metric Calculation (Partial execution permitted)
 |
 v
 Risk Identification
@@ -723,7 +733,7 @@ v
 Recommendation Generation
 |
 v
-Analytics Snapshot
+Analytics Snapshot Generated
 |
 v
 Dashboard / Copilot
@@ -788,19 +798,16 @@ The LLM must never:
 # 11. Database Architecture
 The database stores application state.
 ---
-# 11.1 POC Database
+# 11.1 POC and Production Database
 The POC uses:
-SQLite
-because:
-- Simple deployment
-- Low operational overhead
-- Suitable for demo scale
----
-# 11.2 Future Database
-Production migration:
-SQLite
-  ↓
 PostgreSQL
+because:
+- Enterprise reliability
+- Deterministic analytic consistency
+- Mirrors future production states exactly
+---
+# 11.2 Future Database Scaling
+Production migration will scale the single-instance PostgreSQL into a high-availability cluster.
 ---
 # 11.3 Database Responsibilities
 Stores:
@@ -1011,7 +1018,9 @@ backend/
 │ │
 │ ├── copilot/
 │ │
-│ ├── notifications/
+│ ├── admin/
+│ │
+│ ├── background_jobs/
 │ │
 │ └── system/
 │
@@ -1184,10 +1193,11 @@ Assignees
 Estimates
 Sprint Information
 ---
-### CSV/XLSX Uploads
+### CSV Uploads
 Provides:
 Leave Data
 Skill Data
+(Excel/XLSX formats are strictly prohibited per architectural policy).
 ---
 ## Internal Structure
 imports/
@@ -1327,19 +1337,50 @@ LLM Response
 Potential microservice:
 AI Copilot Service
 ---
-# 17.8 Notification Module
+# 17.8 Platform Administration Module
 ## Responsibility
-Provides proactive workforce notifications.
----
+Provides system configuration and data governance capabilities for Platform Administrators.
+
 ## Responsibilities
-- Daily summaries
-- Risk alerts
-- Notification storage
-- Delivery tracking
----
+- Jira Configuration (testing connections, storing secure credentials)
+- Data Quality Management (surfacing unmapped users, missing estimates)
+- Managing manual sync overrides
+- User and team management
+
 ## Future Extraction
 Potential microservice:
-Notification Service
+Administration Service
+---
+# 17.10 Background Processing Module
+## Responsibility
+Handles automated, scheduled execution of operational data synchronization.
+
+## Responsibilities
+- Daily Scheduled Jira Synchronization (Scheduler component)
+- Triggering Analytics Snapshot generation post-sync
+- Retry policies, logging, and failure handling
+- Exposing Background worker architecture (e.g. async task queue)
+
+## State Transitions
+**Synchronization Lifecycle:**
+Idle → Scheduled → Running → Completed (or Completed with Warnings) → Failed
+
+**Analytics Lifecycle:**
+Waiting → Triggered → Running → Snapshot Generated → Published → Available
+
+## Future Extraction
+Potential microservice:
+Background Worker Service
+---
+# 17.11 Data Quality Component
+## Responsibility
+Identifies, tracks, and isolates malformed data to protect deterministic analytics.
+
+## Responsibilities
+- Flagging identity mapping failures (unmapped users)
+- Flagging missing mandatory fields (e.g., missing original estimates)
+- Isolating invalid records so Graceful Degradation can proceed
+- Surfacing issues to the Platform Administration dashboard
 ---
 # 17.9 System Module
 ## Responsibility
@@ -1429,7 +1470,8 @@ API Gateway
 Auth Service
 Analytics Service
 Copilot Service
-Notification Service
+Platform Administration Service
+Background Processing Service
 Integration Service
 |
 PostgreSQL
@@ -1535,8 +1577,7 @@ Database Storage
 # 23.2 Leave Data Upload
 Leave information is provided through manual file upload.
 Supported formats:
-CSV
-Excel
+CSV Only
 ---
 ## Leave Data Structure
 Example:
@@ -1554,7 +1595,7 @@ Adjusted Utilization
 Future Availability
 ---
 ## Upload Flow
-CSV/XLSX File
+CSV File
     |
     v
 Upload API
@@ -1569,7 +1610,7 @@ Data Storage
 Analytics Processing
 ---
 # 23.3 Skill Mapping Data Upload
-Skill information is provided manually through CSV/XLSX upload.
+Skill information is provided manually through CSV upload.
 ---
 ## Skill Data Structure
 Example:
@@ -1653,21 +1694,13 @@ Storage
 The platform uses PostgreSQL as the primary database in every environment.
 ---
 # 25.1 Database Choice
-## POC
-SQLite
-Reasons:
-- Simple deployment
-- No database infrastructure required
-- Suitable for demonstration scale
----
-## Future Production
-Migration target:
+## POC and Future Production
 PostgreSQL
 Reasons:
-- Better concurrency
-- Enterprise reliability
-- Larger datasets
-- Advanced indexing
+- Enforces strict data consistency
+- Better concurrency for background processing
+- Mirrors enterprise production reliability
+- Handles analytical workloads effectively
 ---
 # 25.2 Database Responsibilities
 The database stores:
@@ -1706,19 +1739,24 @@ Messages
 Audit Logs
 ---
 # 26. Data Processing Pipeline
-The analytics pipeline transforms raw operational data into insights.
+The analytics pipeline transforms raw operational data into insights, utilizing Graceful Degradation to bypass malformed data.
 ---
 # 26.1 Complete Processing Flow
 Raw Operational Data
     |
     v
-Data Cleaning
+Data Cleaning & Validation
+    |
+    +---> Invalid Data (Missing Estimates, Unmapped Users) ---> Data Quality Component
+    |
+    v
+Graceful Degradation (Proceed with valid data)
     |
     v
 Normalization
     |
     v
-Metric Calculation
+Metric Calculation (Partial calculation supported)
     |
     v
 Risk Identification
@@ -1727,7 +1765,7 @@ Risk Identification
 Recommendation Generation
     |
     v
-Analytics Snapshot
+Analytics Snapshot Generated
     |
     v
 Dashboard / Copilot
@@ -2704,7 +2742,6 @@ All external inputs are validated.
 Sources:
 API Requests
 CSV Uploads
-Excel Uploads
 Jira Data
 ---
 Validation includes:
@@ -2935,7 +2972,7 @@ The recommended POC deployment model:
     ----------------------------
     |             |            |
     v             v            v
-SQLite       Analytics     LangGraph
+PostgreSQL   Analytics     LangGraph
 Database      Engine          |
                               v
                           LLM API
@@ -3027,38 +3064,25 @@ Business Modules
 Response
 ---
 # 58. Database Deployment Architecture
-The POC database is:
-SQLite
+The POC database is exclusively:
+PostgreSQL
 ---
 # 58.1 PostgreSQL Deployment
-SQLite runs as part of the application environment.
 Architecture:
 FastAPI Application
     |
     v
-SQLite Database File
+PostgreSQL Database Instance
     |
     v
-Persistent Storage
+Persistent Storage Volume
 ---
 # 58.2 PostgreSQL deployment rationale
 Advantages:
-- Zero database infrastructure
-- Easy setup
-- Simple backup
-- Suitable for demo data
----
-# 58.3 Future Database Migration
-Production evolution:
-SQLite
-  ↓
-PostgreSQL
----
-Benefits:
-- Better concurrency
-- Larger datasets
-- Enterprise reliability
-- Advanced indexing
+- Single source of truth across POC and Production
+- Eliminates migration risk
+- Supports concurrent background syncs and analytics
+- Enables robust deterministic querying
 ---
 # 59. Analytics Engine Deployment
 The Analytics Engine runs internally inside the backend application.
@@ -3100,10 +3124,11 @@ Analytics Service
     v
 Return Metrics
 ---
-Future:
-Scheduled Analytics Jobs
-Background Workers
-Batch Processing
+Background Processing Architecture:
+The system uses a dedicated task scheduler (e.g., APScheduler or BackgroundTasks) to trigger:
+- Scheduled daily Jira syncs
+- Automated Snapshot generation upon sync completion
+This ensures the analytics layer remains up-to-date without blocking web requests.
 ---
 # 60. AI Layer Deployment
 The AI layer is deployed as an internal backend module.
@@ -3221,7 +3246,7 @@ Daily development.
 Contains:
 Local React
 Local FastAPI
-Local SQLite
+Local PostgreSQL
 Test Integrations
 ---
 # 62.2 Demo Environment
@@ -3303,7 +3328,8 @@ Auth Service
 Analytics Service
 Copilot Service
 Integration Service
-Notification Service
+Platform Administration Service
+Background Processing Service
 ---
 # 65.2 Future Infrastructure Improvements
 Possible additions:
@@ -3345,7 +3371,7 @@ React Frontend
     +
 FastAPI Modular Backend
     +
-SQLite Database
+PostgreSQL Database
     +
 LangGraph AI Layer
     +
@@ -3395,10 +3421,9 @@ The selected technology stack is:
 | LLM Provider (POC) | Gemini API |
 | Future Enterprise LLM | Azure OpenAI |
 | Authentication | Microsoft Entra ID |
-| Database (POC) | SQLite |
-| Future Database | PostgreSQL |
+| Database (POC & Future) | PostgreSQL |
 | API Communication | REST APIs |
-| Data Formats | JSON, CSV, Excel |
+| Data Formats | JSON, CSV |
 | Deployment Style | Modular Monolith |
 | Future Deployment | Containerized Cloud Architecture |
 ---
@@ -3635,33 +3660,18 @@ Azure Services
 ---
 # 75. Database Technology Decision
 ---
-# 75.1 SQLite
+# 75.1 PostgreSQL
 ## Decision
 Use:
-SQLite
-for POC.
+PostgreSQL
+for POC and Future Production.
 ---
 ## Reason
-Suitable because:
-- Small dataset
-- Simple setup
-- No operational overhead
----
-# Limitations
-SQLite is not ideal for:
-- Large concurrent users
-- Distributed systems
-- Enterprise workloads
----
-# 75.2 PostgreSQL Future Migration
-Production recommendation:
-PostgreSQL
----
-Reasons:
-- Enterprise reliability
-- Better concurrency
-- Advanced querying
-- Strong ecosystem
+PostgreSQL is strictly mandated by the project constraints. It provides:
+- Reliable concurrent transactions for Background Synchronization jobs
+- Robust analytical querying capabilities
+- Enterprise-grade data integrity
+- A unified data tier from POC through to full enterprise rollout, completely eliminating database migration risks.
 ---
 # 76. API Design Decision
 ---
@@ -3741,7 +3751,7 @@ The architecture evolves through stages.
 Current goal:
 Single Tenant
 Modular Monolith
-SQLite
+PostgreSQL
 Gemini API
 Manual Data Uploads
 ---
@@ -3773,7 +3783,7 @@ React
   |
 FastAPI Modular Monolith
   |
-SQLite
+PostgreSQL
   |
 External APIs
 ---
@@ -3803,8 +3813,7 @@ The final CUIA architecture decisions are:
 | POC LLM | Gemini API |
 | Production LLM | Azure OpenAI |
 | Authentication | Microsoft Entra ID |
-| Database POC | SQLite |
-| Production Database | PostgreSQL |
+| Database | PostgreSQL |
 | API Style | REST |
 | Security Model | RBAC + Scope Filtering |
 | Deployment | Simple POC Deployment |

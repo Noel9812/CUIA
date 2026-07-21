@@ -39,7 +39,7 @@ It describes:
 - Data flow
 - Database design principles
 - Future extensibility considerations
-The purpose of this document is to establish a consistent data foundation that supports the Analytics Engine, dashboards, AI Copilot, notifications, and backend services.
+The purpose of this document is to establish a consistent data foundation that supports the Analytics Engine, dashboards, AI Copilot, and backend services.
 This document intentionally focuses on the logical structure of the application's data and does not define database-specific implementation details such as SQL scripts or ORM models.
 ---
 # 2. Data Model Overview
@@ -47,7 +47,7 @@ The Capacity & Utilization Intelligence Agent is a data-driven application.
 Its primary responsibility is to transform operational workforce data into actionable workforce intelligence.
 The system collects operational information from supported data sources, validates the data, stores it in a structured format, generates analytics, and exposes the resulting insights through dashboards and the AI Copilot.
 The database acts as the central source of truth for all application data.
-Every application module—including analytics, dashboards, notifications, and AI interactions—retrieves information from this centralized data model.
+Every application module—including analytics, dashboards, background processing, and AI interactions—retrieves information from this centralized data model.
 ---
 ## Design Principles
 The data model follows the principles established throughout the project.
@@ -72,14 +72,14 @@ The application treats each category of data according to its ownership.
 | Analytics Results | Analytics Engine |
 | Recommendations | Recommendation Engine |
 | AI Conversations | Application Database |
-| Notifications | Application Database |
+| Configuration & Sync | Application Database |
 The application never modifies externally managed operational data such as Jira issues or Microsoft Entra ID user information.
 ---
 # 3. Data Architecture
 The application's data architecture separates operational information from analytical intelligence.
 Operational data is imported into the system, validated, and stored.
 The Analytics Engine processes this data and generates analytical results.
-These analytical results are then consumed by dashboards, notifications, and the AI Copilot.
+These analytical results are then consumed by dashboards and the AI Copilot.
 ---
 ## Data Flow
 ```text
@@ -110,9 +110,6 @@ Analytics Results
         │              │
         ▼              ▼
 Dashboards      Recommendation Engine
-                       │
-                       ▼
-               Notifications
                        │
                        ▼
                   AI Copilot
@@ -153,9 +150,12 @@ Analytical data is deterministic and reproducible.
 ## Application Data
 Information created internally by the application.
 Examples include:
-- Notifications
 - Copilot Conversations
-- Configuration
+- Application Configuration
+- Jira Configuration
+- Identity Mappings
+- Data Quality Issues
+- Background Job Executions
 - Audit Logs
 ---
 ## Reference Data
@@ -195,6 +195,7 @@ Throughout this lifecycle:
 - Analytics are regenerated whenever required.
 - Recommendations are produced from analytics.
 - AI responses are generated from analytics and recommendations.
+- Data Quality flags isolate malformed records for administrator review without stopping calculations.
 ---
 # 6. Entity Overview
 The application data model consists of several logical entity groups.
@@ -216,6 +217,7 @@ Examples:
 - Worklog
 - Leave Record
 - File Import History
+- Identity Mapping
 ---
 ## Analytical Entities
 Represent calculated workforce intelligence.
@@ -233,9 +235,11 @@ Support application functionality.
 Examples:
 - Copilot Conversation
 - Copilot Message
-- Notification
 - Audit Log
 - Application Configuration
+- Jira Configuration
+- Data Quality Issue
+- Background Job Execution
 The following sections define each entity in detail.
 ---
 # 7. Naming Standards
@@ -357,7 +361,7 @@ User
  │
  ├───────────────► Analytics Results
  │
- ├───────────────► Notifications
+ ├───────────────► Identity Mappings
  │
  └───────────────► Copilot Conversations
 ```
@@ -401,7 +405,7 @@ Users
 ## Purpose
 The Team entity represents an engineering delivery team.
 Teams provide the primary organizational boundary used throughout the application.
-Analytics, dashboards, notifications, and recommendations are generated at the team level.
+Analytics, dashboards, and recommendations are generated at the team level.
 ---
 ## Attributes
 | Attribute | Type | Required | Description |
@@ -668,7 +672,6 @@ Leave data adjusts engineer availability before utilization calculations are per
 ## Data Source
 Primary Source:
 - CSV Upload
-- Excel Upload
 ---
 ## Attributes
 | Attribute | Type | Required | Description |
@@ -774,7 +777,6 @@ They are produced by the Analytics Engine after processing validated operational
 These entities serve as the primary data source for:
 - Dashboards
 - AI Copilot
-- Notifications
 - Historical trend analysis
 - Capacity forecasting
 ---
@@ -919,7 +921,7 @@ Stores calculated skill dependency analytics.
 # Recommendation
 ## Purpose
 Represents deterministic recommendations generated from analytical results.
-Recommendations are produced by the Recommendation Engine and consumed by dashboards, notifications, and the AI Copilot.
+Recommendations are produced by the Recommendation Engine and consumed by dashboards and the AI Copilot.
 ---
 ## Attributes
 | Attribute | Type | Required |
@@ -977,7 +979,7 @@ Productivity   Estimation
 # Summary
 Analytics and Intelligence entities represent the outputs generated by the Analytics Engine.
 Rather than recalculating metrics on every request, the application stores analytical snapshots that provide a consistent, auditable, and performant source of workforce intelligence.
-These entities power dashboards, AI Copilot interactions, forecasting, notifications, and historical trend analysis while preserving the deterministic nature of the platform.
+These entities power dashboards, AI Copilot interactions, forecasting, and historical trend analysis while preserving the deterministic nature of the platform.
 The following section defines the AI and Application entities that support conversations, notifications, configuration, and operational management.
 ---
 # 13. AI & Application Entities
@@ -985,7 +987,9 @@ Application entities support the operation of the Capacity & Utilization Intelli
 Unlike Operational Data and Analytics Data, these entities do not represent workforce information.
 Instead, they enable application features such as:
 - AI Copilot conversations
-- Notifications
+- Platform administration (Jira configuration)
+- Background processing logs
+- Data quality tracking
 - Audit logging
 - Application configuration
 These entities improve usability, security, traceability, and operational management.
@@ -1054,44 +1058,161 @@ Copilot Message
 Analytics Run
 ```
 ---
-# Notification
+# Jira Configuration
 ## Purpose
-The Notification entity stores workforce summaries and system-generated notifications delivered to users.
-Notifications provide proactive visibility into important workforce events.
----
-## Notification Types
-- Daily Workforce Summary
-- Capacity Alert
-- Utilization Alert
-- Forecast Alert
-- Recommendation Alert
----
+The Jira Configuration entity represents the persisted configuration required by the Platform Administration module to connect with and synchronize external Jira data.
+
+## Ownership
+Platform Administration Module.
+
 ## Attributes
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
-| id | UUID | Yes | Internal identifier |
-| recipientUserId | UUID | Yes | Notification recipient |
-| type | Enum | Yes | Notification type |
-| title | String | Yes | Notification title |
-| message | Text | Yes | Notification content |
-| deliveryChannel | Enum | Yes | Dashboard / Email |
-| status | Enum | Yes | Pending / Sent / Failed |
-| generatedAt | DateTime | Yes | Creation timestamp |
-| deliveredAt | DateTime | No | Delivery timestamp |
----
+| id | UUID | Yes | Configuration Identifier |
+| baseUrl | String | Yes | Jira Base URL |
+| authMethod | Enum | Yes | Authentication Method (e.g., API Token, OAuth) |
+| authStatus | Enum | Yes | Authentication Status |
+| lastConnectionTestAt | DateTime | No | Last Connection Test timestamp |
+| lastSuccessfulSyncAt | DateTime | No | Last Successful Sync timestamp |
+| syncSchedule | String | Yes | Synchronization Schedule (cron format) |
+| syncStatus | Enum | Yes | Synchronization Status (Active/Disabled) |
+| createdAt | DateTime | Yes | Created Timestamp |
+| updatedAt | DateTime | Yes | Updated Timestamp |
+
 ## Business Rules
-- Notifications are generated automatically.
-- Delivery status is tracked.
-- Notifications are never shared across users.
-- Notification content is generated from analytics results.
----
+- Only one active Jira configuration is supported for the single-tenant POC.
+- Configuration changes must be audited.
+- Background Job Executions rely on this configuration for connectivity.
+
 ## Relationships
 ```text
-User
+Platform Administrator (User)
  │
  ▼
-Notification
+Jira Configuration
+ │
+ ▼
+Background Job Execution
 ```
+
+## Lifecycle
+Creation → Validation (Connection Test) → Active Use → Update → Deactivation (if superseded).
+
+---
+# Identity Mapping
+## Purpose
+The Identity Mapping entity bridges external Jira users to internal application users based on Microsoft Entra ID. It ensures worklogs are accurately attributed.
+
+## Ownership
+Platform Administration Module.
+
+## Attributes
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| id | UUID | Yes | Mapping Identifier |
+| internalUserId | UUID | No | Internal User Reference |
+| jiraAccountId | String | Yes | Jira User Identifier |
+| jiraEmail | String | No | Jira Email address |
+| mappingStatus | Enum | Yes | Mapped / Unmapped / Ignored |
+| lastValidatedAt | DateTime | Yes | Last Validation Timestamp |
+| createdAt | DateTime | Yes | Created Timestamp |
+
+## Business Rules
+- A Jira Account ID can map to exactly one internal application user.
+- Unmapped records generate a Data Quality Issue for Platform Admin review.
+
+## Relationships
+```text
+Jira Issue (Assignee)
+ │
+ ▼
+Identity Mapping
+ │
+ ▼
+User
+```
+
+## Lifecycle
+Creation (during import) → Validation (email matching) → Active (Mapped) / Review (Unmapped) → Correction (Manual Admin Link) → Retirement.
+
+---
+# Data Quality Issue
+## Purpose
+The Data Quality Issue entity persists records isolated during validation (e.g. unmapped users, missing original estimates) without interrupting analytics, fulfilling the Graceful Degradation requirement.
+
+## Ownership
+Data Quality Component.
+
+## Attributes
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| id | UUID | Yes | Issue Identifier |
+| sourceEntity | Enum | Yes | Source Entity (e.g., Jira Issue, Leave Record) |
+| sourceRecordId | String | Yes | Source Record identifier (e.g., Jira Key) |
+| validationCategory | Enum | Yes | Validation Category (e.g., Missing Estimate, Unmapped User) |
+| severity | Enum | Yes | Severity |
+| description | String | Yes | Human-readable Description |
+| resolutionStatus | Enum | Yes | Open / Resolved / Ignored |
+| createdAt | DateTime | Yes | Created Timestamp |
+| updatedAt | DateTime | Yes | Updated Timestamp |
+| resolvedAt | DateTime | No | Resolved Timestamp |
+
+## Business Rules
+- Does not block the analytics pipeline.
+- Surfaced exclusively to Platform Administrators for remediation.
+
+## Relationships
+```text
+Import History / Sync Job
+ │
+ ▼
+Data Quality Issue
+ │
+ ▼
+Source Record (e.g. Jira Issue)
+```
+
+## Lifecycle
+Detection (Validation phase) → Recording → Review (Dashboard) → Resolution (Admin correction) → Closure.
+
+---
+# Background Job Execution
+## Purpose
+The Background Job Execution entity records the automated synchronization lifecycles required for daily Jira syncs.
+
+## Ownership
+Background Processing Module.
+
+## Attributes
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| id | UUID | Yes | Execution Identifier |
+| jobType | Enum | Yes | Job Type (e.g., Jira Sync, Analytics Generation) |
+| triggerSource | Enum | Yes | Scheduled / Manual Override |
+| status | Enum | Yes | Scheduled, Running, Completed, Completed with Warnings, Failed |
+| startedAt | DateTime | No | Start Time |
+| completedAt | DateTime | No | End Time |
+| recordsProcessed | Integer | No | Records Processed |
+| recordsFailed | Integer | No | Records Failed |
+| failureReason | String | No | Failure Reason |
+
+## Business Rules
+- Background jobs are triggered according to the Jira Configuration sync schedule.
+- Success triggers the Analytics Run automatically.
+
+## Relationships
+```text
+Jira Configuration
+ │
+ ▼
+Background Job Execution
+ │
+ ▼
+Analytics Run
+```
+
+## Lifecycle
+Scheduled → Running → Completed (or Completed with Warnings / Failed) → Archived.
 ---
 # Audit Log
 ## Purpose
@@ -1105,7 +1226,7 @@ Examples include:
 - Jira synchronization
 - Analytics execution
 - Copilot query
-- Notification generation
+- Jira configuration update
 ---
 ## Attributes
 | Attribute | Type | Required | Description |
@@ -1142,7 +1263,6 @@ Configuration allows business rules to evolve without requiring application code
 - Utilization Thresholds
 - Productivity Weights
 - Forecast Parameters
-- Notification Settings
 ---
 ## Attributes
 | Attribute | Type | Required | Description |
@@ -1174,7 +1294,7 @@ Configuration allows business rules to evolve without requiring application code
           ┌─────────┼─────────┐
           │         │         │
           ▼         ▼         ▼
- Conversation  Notification  Audit Log
+ Conversation  Config Admin  Audit Log
       │
       ▼
  Message
@@ -1192,13 +1312,13 @@ Analytics Engine
 |------|-------------|
 | Conversation Ownership | Users can access only their own conversations |
 | Immutable Messages | Messages cannot be modified after creation |
-| Notification Privacy | Notifications are visible only to the intended recipient |
+| Identity Accuracy | Unmapped identities surface as Data Quality Issues |
 | Immutable Audit Logs | Audit records cannot be changed |
 | Unique Configuration Keys | Configuration entries must be unique |
 ---
 # Summary
 Application entities provide the operational capabilities required by the Capacity & Utilization Intelligence Agent.
-They support secure AI conversations, notification delivery, auditability, and configurable business rules while remaining independent of operational workforce data and analytical calculations.
+They support secure AI conversations, background processing, platform administration, auditability, and configurable business rules while remaining independent of operational workforce data and analytical calculations.
 Together with the Master Data, Operational Data, and Analytics entities, these application entities complete the logical data model required for the Proof of Concept.
 ---
 # 14. Complete Data Model Relationships
@@ -1246,7 +1366,7 @@ User
  │
  ├──────── Conversation ─────── Message
  │
- ├──────── Notification
+ ├──────── Identity Mapping
  │
  ├──────── Audit Log
  │
@@ -1280,7 +1400,7 @@ Examples include:
 | Jira Issue | Worklog |
 | Analytics Run | All Analytics Snapshots |
 | Analytics Run | Recommendation |
-| User | Notification |
+| User | Identity Mapping |
 | User | Copilot Conversation |
 | Copilot Conversation | Copilot Message |
 | User | Audit Log |
@@ -1319,7 +1439,7 @@ The application enforces a number of business-level integrity rules to ensure da
 ---
 ## Application
 - Copilot Messages belong to exactly one conversation.
-- Notifications belong to one recipient.
+- Background Job Executions are read-only upon completion.
 - Audit Logs are immutable.
 - Configuration keys are unique.
 ---
@@ -1337,7 +1457,7 @@ The following indexes are recommended to improve application performance.
 | Utilization Snapshot | userId, analyticsRunId |
 | Forecast Snapshot | forecastPeriod |
 | Recommendation | priority, analyticsRunId |
-| Notification | recipientUserId, status |
+| Data Quality Issue | resolutionStatus |
 | Copilot Conversation | userId |
 | Copilot Message | conversationId |
 These indexes represent logical optimization guidance rather than implementation-specific database definitions.
@@ -1350,7 +1470,7 @@ The Proof of Concept maintains sufficient historical information to support tren
 | Operational Data | Retained until refreshed or removed |
 | Analytics Snapshots | Permanent during POC |
 | Recommendations | Permanent during POC |
-| Notifications | Permanent during POC |
+| Data Quality Issues | Retained until resolved or archived |
 | Copilot Conversations | Permanent during POC |
 | Audit Logs | Permanent during POC |
 Future production implementations may introduce configurable retention policies.
@@ -1382,7 +1502,7 @@ The table below summarizes ownership responsibilities across the platform.
 | Analytics Results | Analytics Engine |
 | Recommendations | Recommendation Engine |
 | AI Conversations | Application |
-| Notifications | Application |
+| Platform Configuration | Application |
 | Audit Logs | Application |
 The application never modifies data owned by external systems.
 ---
@@ -1393,7 +1513,7 @@ The model separates data into four logical layers:
 - Operational Data
 - Analytics & Intelligence Data
 - Application Data
-This separation ensures that operational information remains independent from analytical processing while enabling dashboards, recommendations, notifications, and the AI Copilot to operate on consistent, deterministic analytical results.
+This separation ensures that operational information remains independent from analytical processing while enabling dashboards, recommendations, and the AI Copilot to operate on consistent, deterministic analytical results.
 The model is intentionally designed to satisfy the needs of the Proof of Concept while remaining extensible for future enhancements, including scheduled analytics and multi-tenant support.
 This Data Model provides the structural foundation for the API Specification, System Architecture, Security Design, and backend implementation.
 ---

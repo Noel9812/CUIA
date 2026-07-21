@@ -414,19 +414,14 @@ The POC should successfully demonstrate the complete workflow:
 
 ---
 
-## Technical Success Metrics
+## Operational Success Metrics
 
-The platform should:
+The platform should successfully demonstrate robust business operations, including:
 
-- Successfully authenticate users
-- Retrieve Jira project data
-- Process uploaded leave and skill datasets
-- Generate workforce metrics
-- Display interactive dashboards
-- Support conversational AI
-- Enforce role-based access control
-- Enforce team-based scope resolution in the backend
-- Record auditable business, administrative, analytics, and AI operations
+- **Data Completeness:** Identifying and reporting missing data (e.g., unmapped users) without halting the entire analytics pipeline.
+- **Reporting Efficiency:** Demonstrating a measurable reduction in the manual effort required to generate workforce reports.
+- **Actionability:** Ensuring every identified risk is accompanied by a business recommendation.
+- **Secure AI Decision Support:** Proving that the AI can answer complex operational questions while strictly respecting the user's authorized organizational scope.
 
 ---
 
@@ -733,6 +728,29 @@ Leadership users require high-level organizational visibility rather than engine
 
 ---
 
+## Persona 3 — Platform Administrator
+
+### Overview
+
+Platform Administrators govern the application. They are responsible for configuring system connections, maintaining workforce data inputs, and ensuring operational integrity.
+
+### Goals
+
+- Maintain system health and connectivity
+- Ensure successful Jira synchronization
+- Provide accurate leave and skill datasets
+- Manage user onboarding and team assignments
+- Resolve data quality warnings
+
+### Primary Questions
+
+- Is the Jira connection healthy?
+- Which user accounts are unmapped?
+- Did the daily analytics snapshot generate successfully?
+- Are there missing worklogs preventing capacity calculations?
+
+---
+
 # 11. User Roles
 
 The POC supports two application roles.
@@ -779,17 +797,24 @@ Leadership users view summarized organizational information rather than detailed
 
 ---
 
-## Authorization Principle
+## Platform Admin
 
-Authentication identifies the user.
+Purpose:
 
-Authorization determines:
+Application governance and operational data management.
 
-- Which teams can be accessed
-- Which analytics can be viewed
-- Which recommendations can be generated
+Permissions:
 
-All authorization decisions are enforced by the backend.
+- Configure Jira integration
+- Upload Leave and Skill CSV datasets
+- Manage users, roles, and teams
+- View Data Quality Dashboard
+- View Audit Logs
+- Trigger synchronization manually
+
+Cannot:
+
+- Access business analytics (unless explicitly granted Leadership or Delivery Manager roles)
 
 ---
 
@@ -944,75 +969,51 @@ The application should automatically present the latest synchronized analytics.
 
 ---
 
-## Manager Journey
+## Platform Administrator Journey
 
-The primary workflow for Delivery Managers is:
+Platform Administrators require a governance-focused workflow designed to maintain system health, manage data inputs, and ensure analytics accuracy.
 
-```
+**Goal:** Ensure the platform has accurate, synchronized, and mapped operational data.
+**Entry Point:** Platform Dashboard.
+**Actions:**
+- Review Jira synchronization logs to ensure the overnight sync completed successfully.
+- Review the Data Quality Dashboard for unmapped users or records missing estimates.
+- Upload updated Leave and Skill CSV datasets to resolve missing data.
+- Monitor audit logs to verify secure system usage.
+**Expected Outcome:** All operational data is correctly mapped to internal user accounts, allowing accurate analytics generation.
+**Business Value:** Ensures that Leadership and Managers are making decisions based on complete, reliable, and mapped data.
 
-Login
+---
 
-↓
+## Delivery Manager Journey
 
-View Team Dashboard
+The primary workflow for Delivery Managers focuses on tactical, day-to-day team operations.
 
-↓
-
-Identify Risks
-
-↓
-
-Investigate Engineer Details
-
-↓
-
-Review Recommendations
-
-↓
-
-Ask AI Copilot Questions
-
-↓
-
-Plan Capacity Adjustments
-
-```
+**Goal:** Optimize team capacity, balance workloads, and mitigate sprint delivery risks.
+**Entry Point:** Team Dashboard.
+**Actions:**
+- Review the utilization metrics to identify engineers operating above 100% capacity.
+- Drill down into individual engineer workloads to see specific Jira assignments.
+- Review the Recommendation Engine's suggestions for workload redistribution.
+- Query the AI Copilot (e.g., "Why is Rahul overloaded this sprint?") to receive an explanation of the underlying data.
+**Expected Outcome:** Reassignment of specific Jira tickets to engineers with available capacity.
+**Business Value:** Prevents engineer burnout, reduces the risk of missed sprint commitments, and ensures fair workload distribution.
 
 ---
 
 ## Leadership Journey
 
-Leadership users require a simplified workflow focused on organizational health.
+Leadership users require a simplified, strategic workflow focused on organizational health and long-term planning.
 
-```
-
-Login
-
-↓
-
-Executive Dashboard
-
-↓
-
-Review Capacity Trends
-
-↓
-
-Review Organizational Risks
-
-↓
-
-Review Forecast
-
-↓
-
-Consult AI Copilot
-
-↓
-
-Strategic Planning
-
-```
+**Goal:** Understand macro-level capacity trends and identify systemic staffing risks.
+**Entry Point:** Executive Dashboard.
+**Actions:**
+- Review aggregated organizational utilization to determine overall efficiency.
+- Compare team workloads to identify which teams are consistently overloaded.
+- Consult the Forecast Dashboard to identify upcoming capacity gaps over the next 90 days.
+- Use the AI Copilot to summarize organizational health (e.g., "Which teams require additional staffing next month?").
+**Expected Outcome:** Strategic staffing decisions and cross-team resource reallocation.
+**Business Value:** Transforms reactive hiring into proactive capacity planning, ensuring the organization can meet future delivery commitments.
 
 ---
 
@@ -1237,65 +1238,9 @@ Must Have
 
 ---
 
-# PF-009 Notifications
-
-## Description
-
-Generate periodic workforce summaries for managers and leadership.
-
-Notification channels for the POC include:
-
-- Dashboard Notifications
-- Email
-
----
-
-## Business Value
-
-Provides proactive operational awareness.
-
----
-
-## Priority
-
-Nice to Have
-
----
-
-# PF-010 What-If Simulation
-
-## Description
-
-Allow managers to evaluate hypothetical workforce scenarios.
-
-Example scenarios include:
-
-- Engineer leave
-- Increased workload
-- New engineer joins
-- Additional sprint demand
-
----
-
-## Business Value
-
-Supports planning and forecasting discussions.
-
----
-
-## Priority
-
-Nice to Have
-
----
-
 # 15. Feature Prioritization
 
 The Proof of Concept intentionally limits implementation to maximize demonstration value within the available timeline.
-
----
-
-## Must Have
 
 These features are required for a successful demonstration.
 
@@ -1311,18 +1256,6 @@ These features are required for a successful demonstration.
 | Forecast Dashboard | Must Have |
 | AI Copilot | Must Have |
 | Recommendation Engine | Must Have |
-
----
-
-## Nice to Have
-
-The following features will be implemented only if sufficient development time remains.
-
-- Email Summary
-- Dashboard Notifications
-- What-If Simulation
-- Skill Heatmap
-- Dependency Visualization
 
 ---
 
@@ -1609,6 +1542,18 @@ Leadership should quickly understand the overall health of engineering operation
 
 ---
 
+## Scenario 7 — Managing Data Quality
+
+### Background
+
+A Platform Administrator needs to ensure that operational data remains accurate and completely mapped to the organization's workforce.
+
+### Desired Outcome
+
+The Administrator checks the Data Quality Dashboard and notices several "Unmapped Users" flagged after the overnight Jira synchronization. By uploading an updated HR skill mapping file, the Administrator resolves the missing identities, ensuring that the affected engineers now correctly appear in their Delivery Manager's analytics views. This preserves confidence in the system's business metrics.
+
+---
+
 # 18. Assumptions
 
 The following assumptions define the expected operating environment for the Proof of Concept.
@@ -1676,33 +1621,6 @@ The POC will:
 - Support manual upload of leave and skill datasets
 - Support only a single organization
 - Support Platform Admin, Leadership and Delivery Manager application roles
-
----
-
-## Technical Constraints
-
-The application should remain simple enough to be implemented within the available timeline.
-
-Complex distributed architectures are intentionally excluded.
-
-The system will be implemented as a modular monolithic application while maintaining clear boundaries that support future migration toward microservices.
-
----
-
-## AI Constraints
-
-Artificial Intelligence is responsible for:
-
-- Explaining analytics
-- Summarizing workforce health
-- Answering user questions
-- Generating recommendations
-
-Artificial Intelligence will not:
-
-- Calculate business metrics
-- Modify organizational data
-- Make autonomous staffing decisions
 
 ---
 

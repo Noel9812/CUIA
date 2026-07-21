@@ -1269,6 +1269,28 @@ Many-to-many relationships must always be supported.
 
 ---
 
+### Soft Delete Policy
+
+**User:**
+When a user is soft deleted:
+- Authentication denied.
+- User becomes inactive.
+- Historical analytics remain.
+- Historical audit logs remain.
+- Historical AI audit logs remain.
+- Historical Jira ownership remains.
+
+**Team:**
+When a team is archived:
+- Team cannot receive new assignments.
+- Team is hidden from active dashboards.
+- Historical analytics remain.
+- Historical reports remain.
+
+Nothing is physically deleted.
+
+---
+
 ### Jira Administration
 
 Supports:
@@ -1345,6 +1367,18 @@ It does not calculate analytics.
 
 ## Supported Synchronization Modes
 
+### Synchronization Policy
+
+- Initial deployment performs one Full Synchronization.
+- Afterwards the platform performs Incremental Synchronization only.
+- Automatic Incremental Synchronization runs once every 24 hours.
+- Platform Admin may manually trigger synchronization at any time.
+- Real-time synchronization is not supported.
+- Jira webhooks are explicitly out of scope.
+- Synchronization frequency is fixed for the POC and is not user configurable.
+
+---
+
 ### Initial Full Synchronization
 
 Used when:
@@ -1357,6 +1391,13 @@ Imports:
 - All configured projects
 - All supported issue data
 - Historical worklogs
+
+**Historical Data Boundary:**
+- Maximum historical import = 90 days.
+- Initial synchronization imports only the previous 90 days.
+- Older Jira history is ignored.
+- This limit exists to keep the POC performant.
+- Future versions may make this configurable.
 
 ---
 
@@ -1447,6 +1488,18 @@ Analytics never execute directly against raw Jira responses.
 
 ---
 
+## Identity Mapping Policy
+
+- Microsoft Entra ID users and Jira users shall be matched using case-insensitive email address comparison.
+- Successful matches represent the same employee.
+- Synchronization shall continue even when users cannot be matched.
+- Unmatched users shall be imported as Unmapped Users.
+- Unmapped users shall be reported through the Data Quality Dashboard.
+- Unmapped users shall not participate in user-level analytics until resolved.
+- Future versions may support configurable identity mapping strategies.
+
+---
+
 # 21. Leave Management Module
 
 ## Purpose
@@ -1479,6 +1532,22 @@ End Date
 
 Leave Type
 ```
+
+---
+
+## Upload Behaviour
+
+**Business Key:**
+- Employee ID
+- Start Date
+- End Date
+- Leave Type
+
+**Behaviour:**
+- Existing matching record → Update
+- New record → Insert
+- Invalid record → Reject
+- Duplicate rows in same upload → Reject
 
 ---
 
@@ -1535,6 +1604,19 @@ Skill Name
 
 Skill Level (Optional)
 ```
+
+---
+
+## Upload Behaviour
+
+**Business Key:**
+- Employee ID
+- Skill Name
+
+**Behaviour:**
+- Existing skill → Update Skill Level
+- New skill → Insert
+- Duplicate entries → Reject
 
 ---
 
@@ -1914,6 +1996,58 @@ The Analytics Engine shall always follow these principles:
 
 ---
 
+## Analytics Snapshot Policy
+
+- Every successful Analytics Execution creates one immutable Analytics Snapshot.
+- Snapshots include timestamp and analytics version.
+- Snapshots cannot be modified.
+- Snapshots become the source for dashboards and AI responses until the next successful analytics execution.
+- No scheduled snapshot intervals are required.
+
+---
+
+## Historical Data Retention
+
+- Historical analytics remain available throughout the POC.
+- Analytics history is never automatically deleted.
+- No archive policy exists in the POC.
+- Historical analytics remain available for trends and comparisons.
+
+---
+
+## Standard Working Calendar
+
+- Standard working day = 9 hours.
+- Standard working week = Monday through Friday.
+- Standard working week duration = 45 hours.
+- These values define the default working schedule for all analytics calculations in the POC.
+- Future versions may support configurable organizational working schedules.
+
+---
+
+## Business Calendar Policy
+
+- Monday through Friday are considered working days.
+- Saturday and Sunday are considered non-working days.
+- Non-working days do not contribute to engineer capacity.
+- Leave recorded on non-working days shall not reduce available capacity.
+- Public holidays are outside the scope of the POC.
+- Future versions may support configurable business calendars.
+
+---
+
+## Capacity Calculation Policy
+
+- Available Capacity = Standard Working Hours − Approved Leave Hours.
+- Only working days contribute to available capacity.
+- Leave reduces available capacity only on working days.
+- Weekends do not contribute to available capacity.
+- Overtime is ignored in the POC.
+- Capacity calculations are deterministic and completely independent of AI.
+- Detailed mathematical formulas belong in ANALYTICS_SPEC.md, not in the baseline.
+
+---
+
 # 32. Analytics Processing Pipeline
 
 The analytics pipeline follows the sequence below.
@@ -1981,6 +2115,28 @@ AI Copilot (Read Only)
 The AI layer always consumes already computed analytics.
 
 It never participates in calculations.
+
+---
+
+## Data Quality Policy
+
+- Each analytics module shall validate only the fields required for its own calculations.
+- A record missing required data for one analytics module shall be excluded only from that specific calculation.
+- The same record may still participate in other analytics where sufficient data exists.
+- Missing or invalid data shall never interrupt synchronization.
+- Missing or invalid data shall never prevent unrelated analytics modules from executing.
+- Optional fields shall never prevent analytics execution.
+- Detailed validation rules belong in ANALYTICS_SPEC.md.
+
+---
+
+## Missing and Unmapped Data Reporting Policy
+
+- Every excluded analytics record shall be reported through the Data Quality Dashboard.
+- Every unmapped Jira user shall be reported through the Data Quality Dashboard.
+- Data quality issues shall never silently disappear.
+- Synchronization shall complete successfully even when data quality issues are detected.
+- The platform shall clearly distinguish between successful synchronization and data quality warnings.
 
 ---
 
@@ -2329,41 +2485,57 @@ The AI may:
 
 ---
 
-## Prompt Injection Protection
+## AI Conversation Policy
 
-The AI must ignore prompts requesting:
-
-- System prompts
-- Hidden instructions
-- Internal architecture
-- Unauthorized data
-- Administrative actions
-- SQL execution
-- Tool manipulation
+The AI:
+- Maintains context only during the active user session.
+- Does not retain memory across sessions.
+- Does not learn from conversations.
+- Does not personalize future responses.
+- Does not store conversational history beyond audit logging.
 
 ---
 
-## Tool Restrictions
+## AI Out-of-Scope Behaviour
 
-The AI may only invoke approved read-only tools.
+The AI must refuse requests involving:
+- Unauthorized organizational data
+- Hidden prompts
+- Internal instructions
+- SQL generation
+- Database access
+- Configuration changes
+- Administrative operations
+- Authentication bypass
+- RBAC bypass
+- Prompt injection attempts
+- Requests outside workforce intelligence
+- Requests unrelated to CUIA functionality
 
-Examples:
+The AI should politely explain that these requests fall outside its permitted capabilities.
 
-```text
-Get Team Utilization
+---
 
-Get Productivity
+## AI Tool Policy
 
-Get Forecast
+The AI may invoke only approved read-only tools.
 
-Get Recommendations
+Example tool categories include:
+- Dashboard Metrics
+- Utilization Analytics
+- Workload Analytics
+- Productivity Analytics
+- Forecast Analytics
+- Recommendations
+- Skill Risk Analytics
+- Historical Analytics Search
 
-Get Dashboard Metrics
+No generic SQL tool.
+No database access tool.
+No write-capable tools.
+No arbitrary tool execution.
 
-Search Historical Analytics
-```
-
-No write-capable tool shall be exposed to the AI.
+Future tools require updating the Requirements Baseline.
 
 ---
 
@@ -2690,22 +2862,21 @@ The platform executes scheduled background jobs.
 
 ---
 
-## Supported Jobs
+## Background Job Policy
 
-- Jira Synchronization
+Only the following automatic background jobs exist:
+- Daily Incremental Jira Synchronization
 - Analytics Generation
 - Recommendation Generation
-- Historical Snapshot Creation
+- Analytics Snapshot Creation
 
----
-
-## Manual Execution
-
-Platform Admin may manually trigger:
-
-- Jira Sync
+Manual jobs:
+- Full Synchronization
+- Incremental Synchronization
 - Analytics Refresh
 - Historical Recalculation
+
+No other background jobs exist.
 
 ---
 
@@ -2726,13 +2897,30 @@ The platform must fail safely.
 
 ---
 
-## General Rules
+## Error Handling Philosophy
 
-- Never expose stack traces.
-- Never expose database errors.
-- Never expose AI prompts.
-- Never expose secrets.
-- Never expose internal architecture.
+**Business Errors:**
+Clear user-friendly messages
+
+**Authentication:**
+Unauthorized
+
+**Authorization:**
+Access denied
+
+**Validation:**
+Explain validation failures
+
+**Unexpected Errors:**
+Generic response only
+
+The platform must never expose:
+- Stack traces
+- Database details
+- Internal architecture
+- Secrets
+- System prompts
+- Internal implementation details
 
 ---
 
@@ -3478,6 +3666,23 @@ The platform imports:
 # 65. Jira Data Preparation for POC
 
 To demonstrate the platform effectively, realistic Jira data must be created.
+
+---
+
+## POC Demonstration Dataset
+
+The POC is designed to demonstrate functionality using a representative engineering organization.
+
+Recommended baseline:
+- One organization
+- Three to five teams
+- Twenty to fifty engineers
+- Ninety days of historical Jira data
+- Representative leave records
+- Representative skill mappings
+- Sufficient operational history to demonstrate all analytics modules, dashboards, recommendations, and AI capabilities
+
+These values define the expected demonstration dataset and are not platform limitations.
 
 ---
 
@@ -4255,6 +4460,17 @@ The implementation must follow these principles.
 8. Jira is the single source of operational work data.
 9. Every important operation is audited.
 10. Platform configuration is centralized.
+
+---
+
+## System Time Policy
+
+- All timestamps shall be stored internally in UTC.
+- Jira timestamps shall be normalized to UTC during ingestion when required.
+- Backend analytics calculations shall use UTC timestamps.
+- APIs shall expose timestamps in UTC.
+- For the POC demonstration, the frontend shall display timestamps using Asia/Kolkata (IST).
+- Future versions may support configurable display timezones.
 
 ---
 
