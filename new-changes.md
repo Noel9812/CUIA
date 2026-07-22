@@ -1733,7 +1733,6 @@ The architecture intentionally preserves a migration path toward enterprise inte
 
 The current Mock Work Activity Provider can later be replaced by:
 
-
 * Jira Cloud
 * Azure DevOps
 * GitHub Projects
