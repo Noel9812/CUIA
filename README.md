@@ -17,6 +17,7 @@ The application is built with a highly secure architecture enforcing server-side
 - **Backend**: FastAPI, Pandas, LangChain/LangGraph, Google Gemini API
 - **Infrastructure**: Docker, Docker Compose, Nginx
 
+
 ## Prerequisites
 - Docker and Docker Compose
 - Google Gemini API Key (Gemini 2.0 Flash or higher recommended)
