@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pandas
+numpy
+pydantic
+pydantic-settings
+langgraph
+langchain-google-genai
+python-multipart
+reportlab
