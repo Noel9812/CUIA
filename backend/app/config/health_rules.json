@@ -1,0 +1,28 @@
+{
+  "engineer_health": {
+    "weights": {
+      "capacity_balance": 0.20,
+      "utilization": 0.20,
+      "productivity": 0.15,
+      "velocity": 0.15,
+      "estimation_accuracy": 0.10,
+      "critical_issue_penalty": 0.05,
+      "blocked_issue_penalty": 0.05,
+      "dependency_risk": 0.10
+    },
+    "penalties": {
+      "critical_issue_deduction_per_issue": 20,
+      "blocked_issue_deduction_per_issue": 20
+    },
+    "ranges": {
+      "healthy": { "min": 75, "label": "Healthy" },
+      "at_risk": { "min": 50, "max": 75, "label": "At Risk" },
+      "unhealthy": { "max": 50, "label": "Unhealthy" }
+    }
+  },
+  "team_health": {
+    "aggregation": "mean",
+    "threshold_warning": 70,
+    "threshold_critical": 50
+  }
+}

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { chatWithCopilot } from '../services/api';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
+import { Persona } from '../types';
 
-export default function Chat() {
+export default function Chat({ persona }: { persona: Persona }) {
   const [messages, setMessages] = useState<{role: 'user'|'assistant', text: string}[]>([{
     role: 'assistant',
     text: 'Hello! I am your Capacity & Utilization Intelligence Assistant. How can I help you analyze the data today?'
@@ -25,15 +26,21 @@ export default function Chat() {
     setLoading(true);
 
     try {
-      const res = await chatWithCopilot(userMsg);
+      const res = await chatWithCopilot(userMsg, persona);
       setMessages(prev => [...prev, { role: 'assistant', text: res.answer }]);
     } catch (error: any) {
       let errorMsg = 'Sorry, I encountered an error. Please try again.';
       if (error.response && error.response.data && error.response.data.detail) {
         const detail = error.response.data.detail;
-        errorMsg = `Error: ${detail.error_type || 'Unknown'} - ${detail.message || JSON.stringify(detail)}`;
+        if (detail.error_type === 'ServiceUnavailable') {
+          errorMsg = 'AI service is currently unavailable. Please check AWS Bedrock configuration.';
+        } else if (detail.error_type === 'RateLimit') {
+          errorMsg = 'AI service is rate-limited. Please wait a moment and try again.';
+        } else {
+          errorMsg = `Error: ${detail.error_type || 'Unknown'} — ${detail.message || JSON.stringify(detail)}`;
+        }
       } else if (error.message) {
-        errorMsg = `Error: ${error.message}`;
+        errorMsg = `Connection error: ${error.message}`;
       }
       setMessages(prev => [...prev, { role: 'assistant', text: errorMsg }]);
     } finally {
@@ -77,7 +84,7 @@ export default function Chat() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about team utilization, burnout risk, etc..."
+            placeholder="Ask about team utilization, burnout risk, forecasts..."
             className="flex-1 rounded-lg border-gray-300 border p-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             disabled={loading}
           />

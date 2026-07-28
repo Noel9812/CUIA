@@ -5,6 +5,7 @@ numpy
 pydantic
 pydantic-settings
 langgraph
-langchain-google-genai
+langchain-core
+boto3
 python-multipart
 reportlab

@@ -1,0 +1,75 @@
+{
+  "performance_scoring": {
+    "description": "Weighted scoring for engineer performance ranking. AI never computes this.",
+    "weights": {
+      "velocity": 0.30,
+      "health": 0.25,
+      "estimation_accuracy": 0.20,
+      "utilization_balance": 0.15,
+      "blocked_penalty": -0.10
+    },
+    "utilization_balance_target": 85,
+    "normalization": {
+      "velocity_benchmark": 20,
+      "health_max": 100,
+      "estimation_max": 100,
+      "utilization_max": 100
+    }
+  },
+
+  "team_status_rules": {
+    "description": "Deterministic team status classification. AI only explains.",
+    "healthy": {
+      "min_health_score": 75,
+      "max_burnout_count": 0,
+      "max_blocked_issues": 1,
+      "label": "Healthy"
+    },
+    "at_risk": {
+      "min_health_score": 50,
+      "max_burnout_count": 2,
+      "max_blocked_issues": 3,
+      "label": "At Risk"
+    },
+    "critical": {
+      "label": "Critical"
+    }
+  },
+
+  "trend_rules": {
+    "description": "Rules for determining improvement/degradation trends.",
+    "improving_threshold": 5,
+    "degrading_threshold": -5,
+    "comparison_window_sprints": 2
+  },
+
+  "capacity_risk_rules": {
+    "description": "Rules for capacity risk assessment.",
+    "high_risk_utilization": 110,
+    "medium_risk_utilization": 90,
+    "low_risk_utilization": 60,
+    "overstaffed_threshold": 40,
+    "labels": {
+      "high": "Overloaded — immediate action needed",
+      "medium": "Near capacity — monitor closely",
+      "balanced": "Balanced — healthy utilization",
+      "low": "Underutilized — capacity available",
+      "overstaffed": "Significantly understaffed — reassign work"
+    }
+  },
+
+  "replacement_scoring": {
+    "description": "Scoring for engineer replacement candidates. Based on skill overlap and capacity.",
+    "skill_match_weight": 0.50,
+    "capacity_weight": 0.30,
+    "experience_weight": 0.20
+  },
+
+  "priority_attention": {
+    "description": "Rules for determining who needs help first.",
+    "burnout_weight": 40,
+    "utilization_weight": 30,
+    "blocked_weight": 20,
+    "critical_issues_weight": 10
+  }
+}

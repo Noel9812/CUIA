@@ -1,161 +1,239 @@
-from fastapi import APIRouter
+"""
+Dashboard API routes — thin wrappers over analytics, forecast, and recommendation engines.
+
+Dashboard APIs never perform analytics. They only retrieve and scope data
+from the computed engines.
+"""
+
+import logging
+from fastapi import APIRouter, HTTPException
+
 from app.services.analytics_engine import AnalyticsEngine
 from app.services.recommendation_engine import RecommendationEngine
+from app.services.forecast_engine import ForecastEngine
+
+logger = logging.getLogger("cuia.api.dashboard")
 
 router = APIRouter()
 
+
 @router.get("/dashboard/leadership")
 def get_leadership_dashboard():
-    analytics = AnalyticsEngine.get_analytics()
-    recs = RecommendationEngine.get_recommendations()
-    
-    # Calculate Org-wide historical trends
-    engineers = analytics["engineers"]
-    total_avg_cap = sum(e["availableHours"] * 2 for e in engineers)
-    total_logged = sum(e["loggedHours"] for e in engineers)
-    total_historical_vel = sum(e.get("historicalVelocity", e.get("velocity", 0)) for e in engineers)
-    
-    historical_trends = [
-        {"sprint": "Sprint 37", "capacity": total_avg_cap * 1.05, "utilization": total_avg_cap * 0.95, "productivity": 85},
-        {"sprint": "Sprint 38", "capacity": total_avg_cap * 1.02, "utilization": total_avg_cap * 0.90, "productivity": 88},
-        {"sprint": "Sprint 39", "capacity": total_avg_cap * 0.98, "utilization": total_avg_cap * 0.96, "productivity": 92},
-        {"sprint": "Sprint 40", "capacity": total_avg_cap, "utilization": total_avg_cap * 0.98, "productivity": 90},
-        {"sprint": "Sprint 41", "capacity": total_avg_cap * 1.01, "utilization": total_avg_cap * 0.94, "productivity": 87},
-        {"sprint": "Sprint 42", "capacity": total_avg_cap, "utilization": total_logged, "productivity": analytics["organization"]["overallProductivity"]}
-    ]
-    
-    return {
-        "kpis": analytics["organization"],
-        "historicalTrends": historical_trends,
-        "teams": analytics["teams"],
-        "recommendations": [r.model_dump() for r in recs if "teamId" in r.supportingMetrics]
-    }
+    """Leadership dashboard — org-wide view of all KPIs, trends, and recommendations."""
+    try:
+        analytics = AnalyticsEngine.get_analytics()
+        recs = RecommendationEngine.get_recommendations()
+        forecast = ForecastEngine.get_forecast()
+        
+        # Historical trends from computed sprint aggregates (not fabricated)
+        historical_trends = analytics.get("sprintAggregates", [])
+        
+        return {
+            "kpis": analytics["organization"],
+            "historicalTrends": historical_trends,
+            "teams": analytics["teams"],
+            "forecast": forecast,
+            "recommendations": [r.model_dump() for r in recs if "teamId" in r.supportingMetrics],
+        }
+    except Exception as e:
+        logger.error("Leadership dashboard error: %s", str(e))
+        raise HTTPException(status_code=500, detail={"error_type": "DashboardError", "message": str(e)})
+
 
 @router.get("/dashboard/delivery")
 def get_delivery_dashboard(managerId: str):
-    analytics = AnalyticsEngine.get_analytics()
-    teams = [t for t in analytics["teams"] if t["managerId"] == managerId]
-    team_ids = [t["id"] for t in teams]
-    engineers = [e for e in analytics["engineers"] if e["teamId"] in team_ids]
-    issues = [i for i in analytics["issues"] if i["assignee"] in [e["id"] for e in engineers]]
-    
-    recs = RecommendationEngine.get_recommendations()
-    filtered_recs = [r.model_dump() for r in recs if r.supportingMetrics.get("teamId") in team_ids or r.supportingMetrics.get("engineerId") in [e["id"] for e in engineers]]
-    
-    # Calculate delivery manager specific KPIs
-    total_sp = sum(e["storyPoints"] for e in engineers)
-    total_velocity = sum(e["velocity"] for e in engineers)
-    total_historical_velocity = sum(e.get("historicalVelocity", e["velocity"]) for e in engineers)
-    
-    dm_kpis = {
-        "healthScore": sum(t["healthScore"] for t in teams) / max(1, len(teams)),
-        "utilization": sum(e["utilization"] for e in engineers) / max(1, len(engineers)),
-        "remainingCapacity": sum(e["availableHours"] * 2 for e in engineers) - sum(e["loggedHours"] for e in engineers),
-        "forecastCapacityGap": sum(e["availableHours"] * 2 for e in engineers) - total_historical_velocity, 
-        "burnoutRiskCount": sum(1 for e in engineers if e["burnoutRisk"] == "High"),
-        "dependencyRisks": sum(t["dependencyRisk"] for t in teams),
-        "productivity": sum(e["productivity"] for e in engineers),
-        "velocity": total_velocity,
-        "storyPoints": total_sp,
-        "sprintCompletion": 85, # Mock percentage
-        "estimationAccuracy": sum(e["estimationAccuracy"] for e in engineers) / max(1, len(engineers)),
-        "averageResolutionTime": sum(e["averageResolutionTime"] for e in engineers) / max(1, len([e for e in engineers if e["averageResolutionTime"] > 0])),
-        "criticalIssues": sum(e["criticalIssues"] for e in engineers),
-        "blockedIssues": sum(e["blockedTickets"] for e in engineers)
-    }
-    
-    # Forecast aligned with TDD
-    dm_forecast = {
-        "averageCapacity": sum(e["availableHours"] * 2 for e in engineers),
-        "averageVelocity": total_historical_velocity,
-        "forecastDemand": total_historical_velocity,
-        "forecastRisk": "High" if dm_kpis["utilization"] > 90 else "Balanced"
-    }
-    
-    # Mock historical trends for the last 6 sprints for the Capacity vs Utilization line graph
-    historical_trends = [
-        {"sprint": "Sprint 37", "capacity": dm_forecast["averageCapacity"] * 1.05, "utilization": dm_forecast["averageCapacity"] * 0.95},
-        {"sprint": "Sprint 38", "capacity": dm_forecast["averageCapacity"] * 1.02, "utilization": dm_forecast["averageCapacity"] * 0.90},
-        {"sprint": "Sprint 39", "capacity": dm_forecast["averageCapacity"] * 0.98, "utilization": dm_forecast["averageCapacity"] * 0.96},
-        {"sprint": "Sprint 40", "capacity": dm_forecast["averageCapacity"], "utilization": dm_forecast["averageCapacity"] * 0.98},
-        {"sprint": "Sprint 41", "capacity": dm_forecast["averageCapacity"] * 1.01, "utilization": dm_forecast["averageCapacity"] * 0.94},
-        {"sprint": "Sprint 42", "capacity": dm_forecast["averageCapacity"], "utilization": sum(e["loggedHours"] for e in engineers)}
-    ]
-    
-    return {
-        "kpis": dm_kpis,
-        "forecast": dm_forecast,
-        "historicalTrends": historical_trends,
-        "teams": teams,
-        "engineers": engineers,
-        "recommendations": filtered_recs,
-        "issues": issues
-    }
+    """Delivery manager dashboard — scoped to the manager's teams."""
+    try:
+        analytics = AnalyticsEngine.get_analytics()
+        teams = [t for t in analytics["teams"] if t["managerId"] == managerId]
+        
+        if not teams:
+            raise HTTPException(
+                status_code=404,
+                detail={"error_type": "NotFound", "message": f"No teams found for manager: {managerId}"}
+            )
+        
+        team_ids = {t["id"] for t in teams}
+        engineers = [e for e in analytics["engineers"] if e["teamId"] in team_ids]
+        eng_ids = {e["id"] for e in engineers}
+        issues = [i for i in analytics["issues"] if i.get("assignee") in eng_ids]
+        
+        recs = RecommendationEngine.get_recommendations()
+        filtered_recs = [
+            r.model_dump() for r in recs
+            if r.supportingMetrics.get("teamId") in team_ids
+            or r.supportingMetrics.get("engineerId") in eng_ids
+        ]
+        
+        # Compute delivery manager KPIs from analytics (no recomputation)
+        count = len(engineers) if engineers else 1
+        dm_kpis = {
+            "healthScore": sum(t["healthScore"] for t in teams) / max(1, len(teams)),
+            "utilization": sum(e["utilization"] for e in engineers) / count,
+            "remainingCapacity": sum(e["sprintCapacity"] - e["loggedHours"] for e in engineers),
+            "burnoutRiskCount": sum(1 for e in engineers if e["burnoutRisk"] == "High"),
+            "dependencyRisks": sum(t["dependencyRisk"] for t in teams),
+            "productivity": sum(e["productivity"] for e in engineers),
+            "velocity": sum(e["velocity"] for e in engineers),
+            "storyPoints": sum(e["storyPoints"] for e in engineers),
+            "sprintCompletion": sum(e["sprintCompletion"] for e in engineers) / count,
+            "estimationAccuracy": sum(e["estimationAccuracy"] for e in engineers) / count,
+            "averageResolutionTime": (
+                sum(e["averageResolutionTime"] for e in engineers if e["averageResolutionTime"] > 0) /
+                max(1, sum(1 for e in engineers if e["averageResolutionTime"] > 0))
+            ),
+            "criticalIssues": sum(e["criticalIssues"] for e in engineers),
+            "blockedIssues": sum(e["blockedTickets"] for e in engineers),
+        }
+        
+        # Forecast from forecast engine (not hardcoded)
+        dm_forecast = ForecastEngine.get_manager_forecast(managerId)
+        
+        # Historical trends from sprint aggregates scoped to this manager's engineers
+        # For simplicity, use org-wide sprint aggregates (accurate enough for POC)
+        historical_trends = analytics.get("sprintAggregates", [])
+        
+        return {
+            "kpis": dm_kpis,
+            "forecast": dm_forecast,
+            "historicalTrends": historical_trends,
+            "teams": teams,
+            "engineers": engineers,
+            "recommendations": filtered_recs,
+            "issues": issues,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Delivery dashboard error: %s", str(e))
+        raise HTTPException(status_code=500, detail={"error_type": "DashboardError", "message": str(e)})
+
 
 @router.get("/dashboard/team/{teamId}")
 def get_team_details(teamId: str):
-    analytics = AnalyticsEngine.get_analytics()
-    team = next((t for t in analytics["teams"] if t["id"] == teamId), None)
-    engineers = [e for e in analytics["engineers"] if e["teamId"] == teamId]
-    issues = [i for i in analytics["issues"] if i["assignee"] in [e["id"] for e in engineers]]
-    recs = RecommendationEngine.get_recommendations()
-    filtered_recs = [r.model_dump() for r in recs if r.supportingMetrics.get("teamId") == teamId or r.supportingMetrics.get("engineerId") in [e["id"] for e in engineers]]
-    
-    # Calculate skills list from engineers
-    skills_map = {}
-    for e in engineers:
-        for s in e["primarySkills"]:
-            if s not in skills_map:
-                skills_map[s] = {"technology": s, "coverage": 0, "owner": e["name"], "risk": "Low", "candidate": "None"}
-            skills_map[s]["coverage"] += 1
-            
-    for k, v in skills_map.items():
-        if v["coverage"] == 1:
-            v["risk"] = "Critical"
-            
-            # Deterministic Algorithm for Cross-Training
-            # Query engineers on the team with the bottlenecked skill as a secondarySkill
-            # Filter out engineers with Current Sprint Utilization > 80%
-            candidates = [
-                cand for cand in engineers
-                if k in cand["secondarySkills"] and cand["utilization"] <= 80
-            ]
-            
-            if candidates:
-                # Rank by experience (as a proxy for Skill Level since we don't have explicit skill levels in dataset)
-                candidates.sort(key=lambda x: x["experience"], reverse=True)
-                # Output top candidate
-                v["candidate"] = candidates[0]["name"]
-                
-    skills = list(skills_map.values())
-    
-    total_historical_velocity = sum(e.get("historicalVelocity", e["velocity"]) for e in engineers)
-    team_forecast = {
-        "averageCapacity": sum(e["availableHours"] * 2 for e in engineers),
-        "averageVelocity": total_historical_velocity,
-        "forecastDemand": total_historical_velocity,
-        "forecastRisk": "High" if team and team["utilization"] > 90 else "Balanced"
-    }
-    
-    return {
-        "team": team,
-        "engineers": engineers,
-        "issues": issues,
-        "recommendations": filtered_recs,
-        "forecast": team_forecast,
-        "skills": skills
-    }
+    """Team detail view — engineers, skills, issues, forecast, and recommendations."""
+    try:
+        analytics = AnalyticsEngine.get_analytics()
+        team = next((t for t in analytics["teams"] if t["id"] == teamId), None)
+        
+        if not team:
+            raise HTTPException(
+                status_code=404,
+                detail={"error_type": "NotFound", "message": f"Team not found: {teamId}"}
+            )
+        
+        engineers = [e for e in analytics["engineers"] if e["teamId"] == teamId]
+        eng_ids = {e["id"] for e in engineers}
+        issues = [i for i in analytics["issues"] if i.get("assignee") in eng_ids]
+        
+        recs = RecommendationEngine.get_recommendations()
+        filtered_recs = [
+            r.model_dump() for r in recs
+            if r.supportingMetrics.get("teamId") == teamId
+            or r.supportingMetrics.get("engineerId") in eng_ids
+        ]
+        
+        # Skills analysis — computed from engineer data (no hardcoded risk values)
+        skills = _compute_team_skills(engineers)
+        
+        # Team forecast from forecast engine
+        team_forecast = ForecastEngine.get_team_forecast(teamId)
+        
+        return {
+            "team": team,
+            "engineers": engineers,
+            "issues": issues,
+            "recommendations": filtered_recs,
+            "forecast": team_forecast,
+            "skills": skills,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Team dashboard error: %s", str(e))
+        raise HTTPException(status_code=500, detail={"error_type": "DashboardError", "message": str(e)})
+
 
 @router.get("/dashboard/engineer/{engineerId}")
 def get_engineer_details(engineerId: str):
-    analytics = AnalyticsEngine.get_analytics()
-    engineer = next((e for e in analytics["engineers"] if e["id"] == engineerId), None)
-    issues = [i for i in analytics["issues"] if i["assignee"] == engineerId]
-    recs = RecommendationEngine.get_recommendations()
-    filtered_recs = [r.model_dump() for r in recs if r.supportingMetrics.get("engineerId") == engineerId]
+    """Engineer detail view — metrics, issues, and recommendations."""
+    try:
+        analytics = AnalyticsEngine.get_analytics()
+        engineer = next((e for e in analytics["engineers"] if e["id"] == engineerId), None)
+        
+        if not engineer:
+            raise HTTPException(
+                status_code=404,
+                detail={"error_type": "NotFound", "message": f"Engineer not found: {engineerId}"}
+            )
+        
+        issues = [i for i in analytics["issues"] if i.get("assignee") == engineerId]
+        
+        recs = RecommendationEngine.get_recommendations()
+        filtered_recs = [
+            r.model_dump() for r in recs
+            if r.supportingMetrics.get("engineerId") == engineerId
+        ]
+        
+        return {
+            "engineer": engineer,
+            "issues": issues,
+            "recommendations": filtered_recs,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Engineer dashboard error: %s", str(e))
+        raise HTTPException(status_code=500, detail={"error_type": "DashboardError", "message": str(e)})
+
+
+# ──────────────────────────────────────────────
+# Helper functions
+# ──────────────────────────────────────────────
+
+def _compute_team_skills(engineers: list) -> list:
+    """
+    Compute skill coverage, risk, and cross-training candidates from engineer data.
+    Risk levels are computed from coverage count, not hardcoded.
+    """
+    skills_map = {}
     
-    return {
-        "engineer": engineer,
-        "issues": issues,
-        "recommendations": filtered_recs
-    }
+    for eng in engineers:
+        for skill in eng.get("primarySkills", []):
+            if skill not in skills_map:
+                skills_map[skill] = {
+                    "technology": skill,
+                    "coverage": 0,
+                    "owners": [],
+                    "risk": "Low",
+                    "candidate": "None",
+                }
+            skills_map[skill]["coverage"] += 1
+            skills_map[skill]["owners"].append(eng["name"])
+    
+    for skill_name, info in skills_map.items():
+        # Risk based on coverage count
+        if info["coverage"] == 1:
+            info["risk"] = "Critical"
+        elif info["coverage"] == 2:
+            info["risk"] = "Medium"
+        else:
+            info["risk"] = "Low"
+        
+        # Cross-training candidate: engineer with this as secondary skill + utilization <= 80%
+        if info["risk"] in ("Critical", "Medium"):
+            candidates = [
+                eng for eng in engineers
+                if skill_name in eng.get("secondarySkills", [])
+                and eng["utilization"] <= 80
+                and eng["name"] not in info["owners"]
+            ]
+            if candidates:
+                candidates.sort(key=lambda x: x.get("experience", 0), reverse=True)
+                info["candidate"] = candidates[0]["name"]
+        
+        # Set primary owner
+        info["owner"] = info["owners"][0] if info["owners"] else "None"
+        del info["owners"]  # Remove intermediate data
+    
+    return list(skills_map.values())

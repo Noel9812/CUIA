@@ -1,0 +1,42 @@
+{
+  "sprint_duration_weeks": 2,
+  "max_velocity_benchmark_sp": 20,
+  "burnout_thresholds": {
+    "high_utilization_percent": 110,
+    "medium_utilization_percent": 95,
+    "high_critical_issues": 2
+  },
+  "health_score_weights": {
+    "capacity_balance": 0.20,
+    "utilization": 0.20,
+    "productivity": 0.15,
+    "velocity": 0.15,
+    "estimation_accuracy": 0.10,
+    "critical_issue_penalty": 0.05,
+    "blocked_issue_penalty": 0.05,
+    "dependency_risk": 0.10
+  },
+  "health_score_penalties": {
+    "critical_issue_deduction_per_issue": 20,
+    "blocked_issue_deduction_per_issue": 20
+  },
+  "utilization_thresholds": {
+    "idle_below_percent": 60,
+    "overloaded_above_percent": 100,
+    "forecast_risk_above_percent": 90
+  },
+  "active_issue_statuses": [
+    "To Do",
+    "Selected for Development",
+    "In Progress",
+    "Code Review",
+    "Testing",
+    "Ready For QA",
+    "Blocked"
+  ],
+  "resolved_issue_statuses": [
+    "Done",
+    "Released"
+  ],
+  "blocked_status": "Blocked"
+}

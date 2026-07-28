@@ -1,6 +1,7 @@
 import Chat from '../components/Chat';
+import { Persona } from '../types';
 
-export default function Copilot() {
+export default function Copilot({ persona }: { persona: Persona }) {
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       <div className="mb-6">
@@ -9,7 +10,7 @@ export default function Copilot() {
       </div>
       
       <div className="flex-1 min-h-0">
-        <Chat />
+        <Chat persona={persona} />
       </div>
     </div>
   );

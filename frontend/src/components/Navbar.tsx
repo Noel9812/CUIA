@@ -16,7 +16,7 @@ export default function Navbar({ persona, setPersona }: { persona: Persona, setP
     <header className="bg-white shadow-sm z-10 border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center">
-          <span className="text-gray-800 text-lg font-bold">Global Engineering Corp</span>
+          <span className="text-gray-800 text-lg font-bold">CUIA Platform</span>
         </div>
         <div className="relative">
           <button 

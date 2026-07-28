@@ -48,11 +48,18 @@ const EngineerDetails: React.FC = () => {
                 <Briefcase className="w-4 h-4" /> <span>{e.designation}</span>
                 <span className="text-gray-300">•</span>
                 <span>{e.experience} Yrs Exp</span>
+                <span className="text-gray-300">•</span>
+                <span>{e.location}</span>
               </p>
             </div>
-            <div className={`px-4 py-2 rounded-lg border ${e.utilization > 95 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-              <div className="text-sm font-semibold uppercase tracking-wider mb-1">Utilization</div>
-              <div className="text-xl font-bold">{Math.round(e.utilization)}%</div>
+            <div className="flex items-center space-x-3">
+              <div className={`px-3 py-1 rounded-full text-xs font-medium ${e.burnoutRisk === 'High' ? 'bg-red-100 text-red-800' : e.burnoutRisk === 'Medium' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                Burnout: {e.burnoutRisk}
+              </div>
+              <div className={`px-4 py-2 rounded-lg border ${e.utilization > 95 ? 'bg-red-50 border-red-200 text-red-700' : e.utilization < 60 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                <div className="text-sm font-semibold uppercase tracking-wider mb-1">Utilization</div>
+                <div className="text-xl font-bold">{Math.round(e.utilization)}%</div>
+              </div>
             </div>
           </div>
         </div>
@@ -60,24 +67,24 @@ const EngineerDetails: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
-        {/* Capacity */}
+        {/* Capacity — all values from backend, no hardcoded hours */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center"><Clock className="w-5 h-5 mr-2 text-indigo-500" /> Capacity Breakdown</h2>
           <div className="space-y-4">
-             <CapRow label="Gross Working Hours" value="45h" />
-             <CapRow label="Leave / PTO" value={`-${45 - e.availableHours}h`} isDeduction />
-             <div className="pt-4 border-t border-gray-100 flex justify-between font-bold text-gray-900 text-lg">
-               <span>Effective Capacity</span>
-               <span>{e.availableHours}h</span>
-             </div>
-             <div className="pt-2 flex justify-between text-indigo-700 font-medium">
+             <CapRow label="Effective Capacity (per week)" value={`${e.availableHours}h`} />
+             <CapRow label="Sprint Capacity (2-week)" value={`${e.sprintCapacity}h`} />
+             <div className="pt-4 border-t border-gray-100 flex justify-between font-bold text-indigo-700 text-lg">
                <span>Actual Logged Hours</span>
                <span>{e.loggedHours}h</span>
+             </div>
+             <div className="pt-2 flex justify-between text-sm">
+               <span className="text-gray-500">Sprint Completion</span>
+               <span className="font-medium">{Math.round(e.sprintCompletion)}%</span>
              </div>
           </div>
         </section>
 
-        {/* Productivity */}
+        {/* Productivity — all values from backend */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-6 flex items-center"><CheckCircle className="w-5 h-5 mr-2 text-emerald-500" /> Productivity</h2>
           <div className="grid grid-cols-2 gap-y-6 gap-x-4">
@@ -85,10 +92,23 @@ const EngineerDetails: React.FC = () => {
              <div><p className="text-sm text-gray-500">Story Points Delivered</p><p className="text-xl font-bold text-gray-900">{e.storyPoints}</p></div>
              <div><p className="text-sm text-gray-500">Avg Resolution Time</p><p className="text-xl font-bold text-gray-900">{Math.round(e.averageResolutionTime)}h</p></div>
              <div><p className="text-sm text-gray-500">Estimation Accuracy</p><p className="text-xl font-bold text-gray-900">{Math.round(e.estimationAccuracy)}%</p></div>
+             <div><p className="text-sm text-gray-500">Health Score</p><p className="text-xl font-bold text-gray-900">{Math.round(e.health)}/100</p></div>
+             <div><p className="text-sm text-gray-500">Active Tickets</p><p className="text-xl font-bold text-gray-900">{e.activeTickets}</p></div>
           </div>
         </section>
 
       </div>
+
+      {/* Historical Performance */}
+      <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-6">Historical Performance</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div><p className="text-sm text-gray-500">Historical Utilization</p><p className="text-xl font-bold text-gray-900">{Math.round(e.historicalUtilization)}%</p></div>
+          <div><p className="text-sm text-gray-500">Historical Velocity</p><p className="text-xl font-bold text-gray-900">{e.historicalVelocity} SP/sprint</p></div>
+          <div><p className="text-sm text-gray-500">Blocked Tickets</p><p className={`text-xl font-bold ${e.blockedTickets > 0 ? 'text-red-600' : 'text-gray-900'}`}>{e.blockedTickets}</p></div>
+          <div><p className="text-sm text-gray-500">Critical Issues</p><p className={`text-xl font-bold ${e.criticalIssues > 0 ? 'text-red-600' : 'text-gray-900'}`}>{e.criticalIssues}</p></div>
+        </div>
+      </section>
 
       {/* Skills */}
       <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -118,7 +138,7 @@ const EngineerDetails: React.FC = () => {
       {/* Jira Work */}
       <section className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Current Jira Workload</h2>
+          <h2 className="text-lg font-bold text-gray-900">Current Jira Workload ({data.issues.length} issues)</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm whitespace-nowrap">
@@ -126,6 +146,7 @@ const EngineerDetails: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 font-semibold text-gray-600">Key</th>
                 <th className="px-6 py-3 font-semibold text-gray-600">Summary</th>
+                <th className="px-6 py-3 font-semibold text-gray-600">Sprint</th>
                 <th className="px-6 py-3 font-semibold text-gray-600">Priority</th>
                 <th className="px-6 py-3 font-semibold text-gray-600">SP</th>
                 <th className="px-6 py-3 font-semibold text-gray-600">Logged</th>
@@ -137,15 +158,16 @@ const EngineerDetails: React.FC = () => {
                 <tr key={idx} className="hover:bg-gray-50/50">
                   <td className="px-6 py-4 font-medium text-indigo-600">{i.issueKey}</td>
                   <td className="px-6 py-4 truncate max-w-xs">{i.summary}</td>
+                  <td className="px-6 py-4 text-gray-500">{i.sprint || '—'}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${i.priority === 'Critical' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${i.priority === 'Critical' ? 'bg-red-100 text-red-800' : i.priority === 'High' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'}`}>
                       {i.priority}
                     </span>
                   </td>
                   <td className="px-6 py-4">{i.storyPoints}</td>
                   <td className="px-6 py-4">{i.loggedHours}h</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${i.status === 'Done' ? 'bg-emerald-100 text-emerald-800' : (i.blocked ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')}`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${i.status === 'Done' || i.status === 'Released' ? 'bg-emerald-100 text-emerald-800' : (i.blocked ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800')}`}>
                       {i.blocked ? 'Blocked' : i.status}
                     </span>
                   </td>
@@ -153,7 +175,7 @@ const EngineerDetails: React.FC = () => {
               ))}
               {data.issues.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">No Jira issues assigned.</td>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">No Jira issues assigned.</td>
                 </tr>
               )}
             </tbody>
@@ -173,7 +195,7 @@ const EngineerDetails: React.FC = () => {
   );
 };
 
-const CapRow = ({ label, value, isDeduction = false }: any) => (
+const CapRow = ({ label, value, isDeduction = false }: { label: string; value: string; isDeduction?: boolean }) => (
   <div className="flex justify-between text-sm">
     <span className="text-gray-500">{label}</span>
     <span className={`font-medium ${isDeduction ? 'text-red-500' : 'text-gray-900'}`}>{value}</span>

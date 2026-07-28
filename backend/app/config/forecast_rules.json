@@ -1,0 +1,13 @@
+{
+  "forecast_horizon_sprints": 3,
+  "trend_analysis_window_sprints": 3,
+  "risk_thresholds": {
+    "utilization_risk_percent": 90,
+    "capacity_gap_risk_percent": 15,
+    "velocity_decline_risk_percent": 10
+  },
+  "smoothing": {
+    "method": "simple_moving_average",
+    "window_size": 3
+  }
+}
