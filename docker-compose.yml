@@ -4,9 +4,6 @@ services:
     build: 
       context: ./frontend
       dockerfile: Dockerfile
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     environment:
       - VITE_API_BASE_URL=http://localhost/api
     networks:
@@ -17,8 +14,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - APP_ENV=${APP_ENV:-development}

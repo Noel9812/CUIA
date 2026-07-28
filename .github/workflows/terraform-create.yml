@@ -10,6 +10,11 @@ permissions:
 jobs:
   terraform-create:
     name: Terraform Create
+
+    concurrency:
+      group: terraform
+      cancel-in-progress: false
+
     runs-on: ubuntu-latest
 
     environment:
@@ -50,7 +55,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -out=tfplan
+        run: terraform plan -lock-timeout=5m -out=tfplan
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -lock-timeout=5m -auto-approve tfplan
