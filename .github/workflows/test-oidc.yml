@@ -14,7 +14,7 @@ jobs:
   environment:
       name: terraform
 
-    steps:
+  steps:
       - name: Check OIDC Variables
         run: |
           echo "OIDC URL PRESENT?"
