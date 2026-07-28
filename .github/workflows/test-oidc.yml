@@ -11,6 +11,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+  environment:
+      name: terraform
+
     steps:
       - name: Check OIDC Variables
         run: |
