@@ -11,10 +11,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-  environment:
+    environment:
       name: terraform
 
-  steps:
+    steps:
       - name: Check OIDC Variables
         run: |
           echo "OIDC URL PRESENT?"
