@@ -15,7 +15,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - APP_ENV=${APP_ENV:-development}
     env_file:
       - .env
