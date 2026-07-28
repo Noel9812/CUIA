@@ -33,22 +33,22 @@ jobs:
           PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
 
           python3 - <<PY
-import base64
-import json
+          import base64
+          import json
 
-payload = """$PAYLOAD"""
-payload += "=" * (-len(payload) % 4)
+          payload = """$PAYLOAD"""
+          payload += "=" * (-len(payload) % 4)
 
-decoded = base64.urlsafe_b64decode(payload)
-claims = json.loads(decoded)
+          decoded = base64.urlsafe_b64decode(payload)
+          claims = json.loads(decoded)
 
-print("\n===== OIDC CLAIMS =====")
-print(json.dumps(claims, indent=2))
-print("=======================\n")
+          print("\n===== OIDC CLAIMS =====")
+          print(json.dumps(claims, indent=2))
+          print("=======================\n")
 
-print("SUB CLAIM:")
-print(claims.get("sub"))
-PY
+          print("SUB CLAIM:")
+          print(claims.get("sub"))
+          PY
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
