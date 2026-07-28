@@ -156,9 +156,9 @@ ANALYTICS_KEYWORDS: list[tuple[str, int]] = [
 
     # Dependencies & Skills
     ("dependencies", W_MEDIUM), ("dependency risk", W_STRONG),
-    ("single point of failure", W_STRONG), ("spof", W_STRONG),
+    ("single point of failure", W_STRONG), ("single points of failure", W_STRONG), ("spof", W_STRONG),
     ("skill coverage", W_STRONG), ("coverage", W_WEAK),
-    ("skill gap", W_MEDIUM), ("skills", W_WEAK),
+    ("skill gap", W_MEDIUM), ("skills", W_WEAK), ("skill distribution", W_STRONG),
     ("bus factor", W_STRONG), ("key person risk", W_STRONG),
     ("multiple skills", W_STRONG), ("how many skills", W_STRONG),
     ("skill count", W_STRONG),
@@ -202,7 +202,7 @@ ANALYTICS_KEYWORDS: list[tuple[str, int]] = [
     # Specific patterns
     ("who has the highest", W_MEDIUM), ("who has the lowest", W_MEDIUM),
     ("who is the busiest", W_STRONG), ("who is the most", W_MEDIUM),
-    ("who is the least", W_MEDIUM),
+    ("who is the least", W_MEDIUM), ("least busy", W_STRONG),
     ("highest utilization", W_STRONG), ("lowest utilization", W_STRONG),
     ("highest velocity", W_STRONG), ("lowest velocity", W_STRONG),
     ("most blocked", W_STRONG), ("logged hours", W_MEDIUM),
@@ -239,7 +239,8 @@ FORECAST_KEYWORDS: list[tuple[str, int]] = [
     ("velocity trend", W_STRONG), ("utilization trend", W_STRONG),
     ("will we", W_WEAK), ("are we on track", W_MEDIUM),
     ("outlook", W_MEDIUM), ("predict next", W_STRONG),
-    ("forecast next", W_STRONG),
+    ("forecast next", W_STRONG), ("enough capacity", W_STRONG),
+    ("will we have enough capacity", W_STRONG),
 ]
 
 RECOMMENDATION_KEYWORDS: list[tuple[str, int]] = [
@@ -254,8 +255,8 @@ RECOMMENDATION_KEYWORDS: list[tuple[str, int]] = [
     ("next action", W_STRONG), ("action items", W_STRONG),
     ("action plan", W_STRONG), ("priority action", W_STRONG),
     ("should we", W_MEDIUM), ("what should", W_MEDIUM),
-    ("how to improve", W_STRONG), ("how to fix", W_MEDIUM),
-    ("how to reduce", W_MEDIUM), ("how can we", W_MEDIUM),
+    ("how to improve", 5), ("how to fix", 5),
+    ("how to reduce", 5), ("how can we", 5), ("how do we", 5),
     ("best practice", W_STRONG), ("best practices", W_STRONG),
     ("cross training", W_STRONG), ("cross-training", W_STRONG),
     ("burnout reduction", W_STRONG), ("reduce burnout", W_STRONG),
@@ -263,7 +264,9 @@ RECOMMENDATION_KEYWORDS: list[tuple[str, int]] = [
     ("resource balancing", W_STRONG), ("rebalance", W_MEDIUM),
     ("load balancing", W_STRONG),
     ("team improvement", W_STRONG), ("capacity improvement", W_STRONG),
-    ("risk reduction", W_STRONG),
+    ("risk reduction", W_STRONG), ("ways to improve", W_STRONG),
+    ("optimize resource allocation", W_STRONG), ("fix the capacity gap", W_STRONG),
+    ("resolve blockers faster", W_STRONG), ("reduce critical issues", W_STRONG),
 ]
 
 WHATIF_KEYWORDS: list[tuple[str, int]] = [

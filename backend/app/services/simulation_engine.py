@@ -46,6 +46,7 @@ class SimulationEngine:
             
         Supported types:
             - engineer_leave: {"type": "engineer_leave", "engineerId": "eng-1", "leaveHours": 40}
+            - team_leave: {"type": "team_leave", "teamId": "t-1", "leaveHours": 40}
             - engineer_join: {"type": "engineer_join", "engineer": {...}}
             - engineer_depart: {"type": "engineer_depart", "engineerId": "eng-1"}
             - capacity_change: {"type": "capacity_change", "engineerId": "eng-1", "newCapacity": 30}
@@ -53,6 +54,11 @@ class SimulationEngine:
             - remove_issues: {"type": "remove_issues", "issueKeys": [...]}
             - redistribute_work: {"type": "redistribute_work", "fromEngineerId": "eng-1", "toEngineerId": "eng-2"}
             - team_restructure: {"type": "team_restructure", "engineerId": "eng-1", "newTeamId": "t-2"}
+            - skill_gain: {"type": "skill_gain", "engineerId": "eng-1", "skill": "React"}
+            - skill_loss: {"type": "skill_loss", "engineerId": "eng-1", "skill": "React"}
+            - team_merge: {"type": "team_merge", "fromTeamId": "t-1", "toTeamId": "t-2"}
+            - team_split: {"type": "team_split", "teamId": "t-1", "newTeamId": "t-new", "newTeamName": "New Team"}
+            - sprint_delay: {"type": "sprint_delay", "days": 7}
             
         Returns:
             Dict with "before", "after", and "delta" analytics.
@@ -117,6 +123,7 @@ class SimulationEngine:
         """Map scenario type to handler method."""
         handlers = {
             "engineer_leave": cls._handle_engineer_leave,
+            "team_leave": cls._handle_team_leave,
             "engineer_join": cls._handle_engineer_join,
             "engineer_depart": cls._handle_engineer_depart,
             "capacity_change": cls._handle_capacity_change,
@@ -124,6 +131,11 @@ class SimulationEngine:
             "remove_issues": cls._handle_remove_issues,
             "redistribute_work": cls._handle_redistribute_work,
             "team_restructure": cls._handle_team_restructure,
+            "skill_gain": cls._handle_skill_gain,
+            "skill_loss": cls._handle_skill_loss,
+            "team_merge": cls._handle_team_merge,
+            "team_split": cls._handle_team_split,
+            "sprint_delay": cls._handle_sprint_delay,
         }
         return handlers.get(scenario_type)
 
@@ -223,6 +235,71 @@ class SimulationEngine:
                         break
                 break
         
+        return dataset
+
+    @staticmethod
+    def _handle_skill_gain(dataset: Dataset, scenario: Dict) -> Dataset:
+        eng_id = scenario.get("engineerId")
+        skill = scenario.get("skill")
+        for eng in dataset.engineers:
+            if eng.id == eng_id:
+                if skill not in eng.primarySkills and skill not in eng.secondarySkills:
+                    eng.secondarySkills.append(skill)
+                break
+        return dataset
+
+    @staticmethod
+    def _handle_skill_loss(dataset: Dataset, scenario: Dict) -> Dataset:
+        eng_id = scenario.get("engineerId")
+        skill = scenario.get("skill")
+        for eng in dataset.engineers:
+            if eng.id == eng_id:
+                eng.primarySkills = [s for s in eng.primarySkills if s != skill]
+                eng.secondarySkills = [s for s in eng.secondarySkills if s != skill]
+                eng.learningSkills = [s for s in eng.learningSkills if s != skill]
+                break
+        return dataset
+
+    @staticmethod
+    def _handle_team_merge(dataset: Dataset, scenario: Dict) -> Dataset:
+        from_team_id = scenario.get("fromTeamId")
+        to_team_id = scenario.get("toTeamId")
+        to_team = next((t for t in dataset.teams if t.id == to_team_id), None)
+        if to_team:
+            for eng in dataset.engineers:
+                if eng.teamId == from_team_id:
+                    eng.teamId = to_team_id
+                    eng.managerId = to_team.managerId
+            dataset.teams = [t for t in dataset.teams if t.id != from_team_id]
+        return dataset
+
+    @staticmethod
+    def _handle_team_split(dataset: Dataset, scenario: Dict) -> Dataset:
+        from_team_id = scenario.get("teamId")
+        new_team_id = scenario.get("newTeamId")
+        new_team_name = scenario.get("newTeamName", "New Split Team")
+        
+        from_team = next((t for t in dataset.teams if t.id == from_team_id), None)
+        if from_team:
+            from app.models.schemas import Team
+            new_team = Team(id=new_team_id, name=new_team_name, managerId=from_team.managerId)
+            dataset.teams.append(new_team)
+            
+            engs_in_team = [e for e in dataset.engineers if e.teamId == from_team_id]
+            # Move half
+            for i, eng in enumerate(engs_in_team):
+                if i % 2 == 1:
+                    eng.teamId = new_team_id
+        return dataset
+
+    @staticmethod
+    def _handle_sprint_delay(dataset: Dataset, scenario: Dict) -> Dataset:
+        """Simulate sprint delay by reducing effective capacity to simulate lost time."""
+        days = scenario.get("days", 7)
+        hours_lost = (days / 5) * 40 # Rough translation to work hours
+        for eng in dataset.engineers:
+            eng.leaveHours += hours_lost
+            eng.effectiveCapacity = max(0, eng.workingHoursPerWeek - eng.leaveHours - eng.meetingHours - eng.trainingHours)
         return dataset
 
     # ──────────────────────────────────────────────
