@@ -1,4 +1,4 @@
-name: Test AWS OIDC
+name: AWS OIDC Test
 
 on:
   workflow_dispatch:
@@ -11,11 +11,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    environment:
-      name: terraform
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Check OIDC Variables
+        run: |
+          echo "OIDC URL PRESENT?"
+          test -n "$ACTIONS_ID_TOKEN_REQUEST_URL" && echo YES || echo NO
+
+          echo "OIDC TOKEN PRESENT?"
+          test -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" && echo YES || echo NO
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -23,5 +26,5 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
-      - name: Validate Identity
+      - name: Verify Identity
         run: aws sts get-caller-identity
