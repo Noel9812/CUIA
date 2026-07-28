@@ -11,8 +11,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # environment:
-    #   name: terraform
+    environment:
+      name: terraform
 
     steps:
       - uses: actions/checkout@v4
