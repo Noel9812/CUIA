@@ -1,5 +1,3 @@
 node_modules
-dist
+*ist
 .git
-.gitignore
-Dockerfile
