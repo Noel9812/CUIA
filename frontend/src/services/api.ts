@@ -2,7 +2,7 @@ import axios from 'axios';
 import { LeadershipDashboardData, DeliveryDashboardData, TeamDetailsData, EngineerDetailsData } from '../types';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost/api',
+  baseURL: '/api',
 });
 
 export const fetchLeadershipDashboard = async (): Promise<LeadershipDashboardData> => {
