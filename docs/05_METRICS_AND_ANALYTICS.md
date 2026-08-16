@@ -1,134 +1,185 @@
-# 5. Metrics & Analytics
+# 5. Metrics & Analytics (Implementation Trace)
 
-This document is the authoritative reference for every metric calculated by CUIA. 
-**Crucial Architecture Note:** The LLM *never* computes these metrics. The `AnalyticsEngine` calculates them deterministically based on configuration values defined in `config/analytics_rules.json` and `config/priority_weights.json`.
+This document is the exhaustive, implementation-level reference for every metric calculated by CUIA. It documents what the code actually does, what configurations are used, and traces the data lineage exactly from `dataset.json`.
 
-## Core Mathematical Formulas
+**Source of Truth:** 
+- Code: `backend/app/services/analytics_engine.py`
+- Configuration: `backend/app/config/analytics_rules.json`, `health_rules.json`, `priority_weights.json`
+- Data: `backend/sample_data/dataset.json`
+
+---
+
+## CORE METRICS
 
 ### 1. Utilization
 
-**Business Meaning:** How much of an engineer's or team's available time is spent logging actual work.
+1. **Business Meaning:** How much of an engineer's or team's available time is spent logging actual work.
+2. **Why CUIA Uses It:** To identify idle capacity or dangerous overloading.
+3. **Source Data:** `issue.loggedHours`, `engineer.effectiveCapacity`
+4. **Source of Each Value:** 
+   - `dataset.json -> issues` (filtered to current sprint)
+   - `dataset.json -> engineers`
+5. **Calculation:**
+   ```text
+   Utilization (%) = 
+       Sum(loggedHours)
+       --------------------------------------------- × 100
+       (effectiveCapacity × sprint_duration_weeks)
+   ```
+6. **Implementation:** 
+   `backend/app/services/analytics_engine.py` -> `AnalyticsEngine._compute_engineer_metrics()`
+7. **Step-by-Step Calculation:**
+   - Step 1: Find all `issues` assigned to Engineer X.
+   - Step 2: Sum `loggedHours` across all those issues.
+   - Step 3: Multiply Engineer X's `effectiveCapacity` by `sprint_duration_weeks`.
+   - Step 4: Divide the total logged hours by the total sprint capacity.
+   - Step 5: Multiply by 100.
+8. **Configuration:** 
+   - `sprint_duration_weeks` (from `analytics_rules.json`, currently `2`). It defines how many weeks are in a sprint to calculate total capacity. If changed to `3`, utilization percentages would drop as the denominator increases.
+9. **Edge Cases:**
+   - *Zero Capacity:* If `effectiveCapacity` is 0, utilization is hardcoded to return `0.0` to avoid division by zero.
+   - *Missing Values:* Null `loggedHours` are treated as `0`.
+   - *Utilization > 100%:* Can and does occur. It is not capped at 100%, allowing for accurate burnout detection.
+10. **Aggregation:** 
+    - **Engineer to Team:** RATIO OF TOTALS. 
+      `Team Utilization = Sum(All Members' Logged Hours) / Sum(All Members' Capacity) × 100`
+    - *Why not average?* Averaging individual utilizations creates statistical distortion if engineers have different base capacities (e.g., part-time vs full-time). CUIA strictly uses sum-based ratios.
+11. **Worked Example (from dataset.json):**
+    - **Engineer:** Grace (`eng-5`)
+    - **Capacity:** `effectiveCapacity` = 40. Sprint capacity = 40 × 2 = 80 hours.
+    - **Logged:** Assumes she logged 60 hours across her tickets.
+    - **Result:** (60 / 80) × 100 = 75.0%
+12. **Dashboard Output:** Radial charts in `TeamDetails.tsx`.
+13. **Copilot Output:** `ContextBuilder._build_dm_analytics()` includes this in the LLM JSON payload.
+14. **Validation:** `tests/audit/dashboard_oracle.py` re-calculates this from scratch to prove the API returns the exact mathematical truth.
 
-- **Source Fields:** `Issue.loggedHours`, `Engineer.effectiveCapacity`
-- **Configuration:** `sprint_duration_weeks` (default: 2)
+---
 
-**Formula (Engineer):**
+### 2. Productivity Score
+
+1. **Business Meaning:** A weighted measure of output valuing high-priority work.
+2. **Why CUIA Uses It:** To distinguish between an engineer completing 10 trivial tickets vs 1 critical ticket.
+3. **Source Data:** `issue.storyPoints`, `issue.priority`, `issue.status`
+4. **Source of Each Value:** `dataset.json -> issues`
+5. **Calculation:**
+   ```text
+   Productivity = Sum(storyPoints × PriorityWeight) for all resolved issues
+   ```
+6. **Implementation:** `AnalyticsEngine._compute_engineer_metrics()`
+7. **Step-by-Step Calculation:**
+   - Step 1: Filter issues to only those in `resolved_issue_statuses` (e.g., "Done").
+   - Step 2: Multiply each issue's `storyPoints` by the value in `priority_weights.json` matching its `priority`.
+   - Step 3: Sum the results.
+8. **Configuration:** 
+   - `priority_weights.json` (Critical: 8, High: 5, Medium: 3, Low: 1).
+   - `resolved_issue_statuses` (from `analytics_rules.json`).
+9. **Edge Cases:** Unestimated tickets (0 points) add 0 to productivity, regardless of priority.
+10. **Aggregation:** 
+    - **Engineer to Team:** SUM. `Team Productivity = Sum(All Members' Productivity)`
+
+---
+
+## HEALTH SCORE (Deep Explanation)
+
+The Health Score is a composite metric combining positive operational output with negative risk penalties.
+
+**Implementation File:** `health_rules.json` and `AnalyticsEngine._compute_engineer_metrics()`
+
+### Components
+
+**1. Capacity Balance (Weight: 0.20)**
+- *Source:* Engineer Utilization.
+- *Formula:* `100 - abs(100 - utilization)`. (e.g., 90% util = 90 pts. 110% util = 90 pts).
+- *Contribution:* Rewards being near 100%; heavily penalizes severe over/under utilization.
+
+**2. Utilization (Weight: 0.20)**
+- *Source:* Engineer Utilization (capped at 100 for this component).
+- *Contribution:* Rewards actual time spent working.
+
+**3. Productivity (Weight: 0.15)**
+- *Source:* Productivity Score.
+- *Normalization:* `(productivity / max_productivity_benchmark) * 100` (capped at 100).
+- *Contribution:* Rewards high-value output.
+
+**4. Velocity (Weight: 0.15)**
+- *Source:* Total resolved Story Points.
+- *Normalization:* `(velocity / max_velocity_benchmark_sp) * 100` (capped at 100).
+
+**5. Estimation Accuracy (Weight: 0.10)**
+- *Formula:* `100 - (abs(Logged - Estimate) / Estimate * 100)`.
+
+**6. Dependency Risk (Weight: 0.10)**
+- *Source:* Spof evaluation. Max points (100) if no single points of failure exist.
+
+### Penalties (Flat Deductions)
+- **Critical Issues:** `critical_issues * critical_issue_deduction_per_issue` (Configured as 20).
+- **Blocked Issues:** `blocked_issues * blocked_issue_deduction_per_issue` (Configured as 20).
+
+### Final Score Calculation
 ```text
-Utilization (%) = 
-  Sum of loggedHours for all issues in current sprint
-  --------------------------------------------------- × 100
-  (effectiveCapacity × sprint_duration_weeks)
+Base Score = (CapBal × 0.20) + (Util × 0.20) + (Prod × 0.15) + (Vel × 0.15) + (EstAcc × 0.10) + (DepRisk × 0.10)
+Final Score = Max(0, Base Score - (CriticalIssues × 20) - (BlockedIssues × 20))
 ```
+*Why can a team have high utilization but low health?* If a team is 110% utilized, but has 3 blocked issues (60 point penalty), their health score will crash despite working hard.
 
-**Formula (Team / Organization):**
-```text
-Utilization (%) = 
-  Sum of all members' loggedHours
-  ------------------------------- × 100
-  Sum of all members' capacity
+---
+
+## BURNOUT RISK
+
+**Implementation:** `AnalyticsEngine._compute_burnout_risk()`
+**Configuration:** `analytics_rules.json` (`burnout_thresholds`)
+
+The logic uses strict comparison operators:
+```python
+if utilization > 110 or critical_count > 2:
+    return "High"
+elif utilization > 95:
+    return "Medium"
+return "Low"
 ```
-_Note: CUIA aggregates by **Sum of Totals**, not an average of individual percentages. This prevents mathematical distortion when capacities vary._
+*Note the strictly greater-than `>` operator.* Exactly 110.0% utilization is "Medium", but 110.1% is "High". Exactly 2 critical issues is "Medium", but 3 is "High".
 
-### 2. Velocity (Story Points)
+---
 
-**Business Meaning:** The raw output of completed agile story points.
+## FORECASTING ENGINE
 
-- **Source Fields:** `Issue.storyPoints`, `Issue.status` (must be in `resolved_statuses`)
+**Implementation:** `backend/app/services/forecast_engine.py`
 
-**Formula (Engineer):**
-```text
-Velocity = Sum of storyPoints for all resolved issues in current sprint
-```
+**Goal:** Predict capacity shortfalls based on historical trends.
 
-### 3. Productivity Score
+1. **Calculate Historical Velocity:** Uses a simple moving average (configured `window_size` = 3) of past sprint velocities.
+2. **Calculate Historical Effort:** Averages `loggedHours / storyPoints` to find the team's historical ratio.
+3. **Analyze Backlog:** Sums the points of all "To Do" issues assigned to the next sprint.
+4. **Project Shortfall:** `(Backlog Points × Historical Effort Ratio) - Next Sprint Capacity`.
+5. **Risk Evaluation:** If Projected Utilization > `forecast_risk_above_percent` (90%), it flags "Risk", else "Balanced".
 
-**Business Meaning:** A weighted measure of output that values high-priority work over low-priority work.
+---
 
-- **Source Fields:** `Issue.storyPoints`, `Issue.priority`
-- **Configuration:** `priority_weights.json` (e.g., Critical=8, High=5, Medium=3, Low=1)
+## WHAT-IF / SIMULATION ENGINE
 
-**Formula (Engineer):**
-```text
-Productivity = Sum(storyPoints × Priority Weight) for all resolved issues
-```
+**Implementation:** `backend/app/services/simulation_engine.py`
 
-### 4. Estimation Accuracy
+The Simulation engine operates via strict state-mutation:
+1. Performs a deep copy of the `Dataset` object in memory.
+2. Applies the requested mutation (e.g., removing an engineer).
+3. Reallocates the engineer's active `Issues` to remaining engineers on the same team who share the required `primarySkills`.
+4. Re-runs the entire `AnalyticsEngine._compute_team_metrics()` on the mutated dataset.
+5. Returns a JSON diff comparing the original metrics to the simulated metrics, which the LangGraph Copilot translates into a natural language impact assessment.
 
-**Business Meaning:** How closely the logged effort matches the original estimate.
+---
 
-- **Source Fields:** `Issue.loggedHours`, `Issue.originalEstimate`
+## RECOMMENDATION ENGINE
 
-**Formula (Engineer):**
-```text
-Accuracy (%) = 
-  100 - ( |Sum(loggedHours) - Sum(originalEstimate)| / Max(1, Sum(originalEstimate)) × 100 )
-```
-_Capped at a minimum of 0%._
+**Implementation:** `backend/app/services/recommendation_engine.py`
 
-### 5. Health Score
+Recommendations are entirely deterministic and rule-based. The LLM does *not* invent recommendations.
 
-**Business Meaning:** A holistic 0-100 score reflecting team or engineer operational health, balancing output against risk factors.
-
-- **Source Fields:** Utilization, Productivity, Velocity, Estimation Accuracy, Active Critical Issues, Blocked Issues
-- **Configuration:** `health_rules.json` (weights and penalties)
-
-**Formula (Engineer):**
-```text
-Health Score = 
-  (Capacity Balance Score × weight) +
-  (Utilization Score × weight) +
-  (Normalized Productivity Score × weight) +
-  (Normalized Velocity Score × weight) +
-  (Estimation Accuracy × weight) -
-  (Critical Issues × Penalty) -
-  (Blocked Issues × Penalty)
-```
-_Note: Team health is the mathematical average of member health scores._
-
-### 6. Burnout Risk
-
-**Business Meaning:** An indicator of engineers working dangerously beyond capacity or under extreme stress from critical issues.
-
-- **Configuration:** `analytics_rules.json` (`high_utilization_percent`, `high_critical_issues`)
-
-**Logic:**
-```text
-IF utilization > high_utilization_percent (e.g., 110%) 
-   OR critical_issues > high_critical_issues:
-   Risk = "High"
-ELSE IF utilization > medium_utilization_percent (e.g., 90%):
-   Risk = "Medium"
-ELSE:
-   Risk = "Low"
-```
-
-### 7. Average Resolution Time
-
-**Business Meaning:** The average hours taken to resolve an issue from start to finish.
-
-- **Source Fields:** `Issue.startedTime`, `Issue.resolvedTime` (ISO strings)
-
-**Formula:**
-```text
-Resolution Time (hours) = Average of (resolvedTime - startedTime) for all resolved issues
-```
-
-### 8. Dependency Risk / SPOF (Single Point of Failure)
-
-**Business Meaning:** The count of unique critical skills within a team (or org) that are possessed by exactly one engineer.
-
-- **Source Fields:** `Engineer.primarySkills`
-
-**Logic:**
-Count occurrences of each skill in a team. If a skill appears exactly 1 time, it is a SPOF. The team's `dependencyRisk` is the total count of such skills.
-
-## Metric Traceability Example
-
-How a Team's Utilization appears on the Dashboard:
-1. **Dataset:** `Issue` 1 has 40 `loggedHours`. `Issue` 2 has 20 `loggedHours`. Both belong to Engineer A.
-2. **Dataset:** Engineer A has an `effectiveCapacity` of 32.
-3. **AnalyticsEngine:** Computes Engineer A's sprint capacity: `32 × 2 weeks = 64`.
-4. **AnalyticsEngine:** Computes Engineer A's utilization: `(60 / 64) × 100 = 93.75%`.
-5. **AnalyticsEngine:** Rolls this up with Engineer B to compute the Team Utilization.
-6. **API:** Returns JSON containing `"utilization": 93.75` for the team.
-7. **React Component:** Renders the radial progress chart using the exact JSON value.
+**Execution:**
+1. The engine iterates through configured rules in `recommendation_rules.json`.
+2. Rule: `High Burnout`
+   - Trigger: `team.burnoutRisk > 0` (Meaning at least 1 engineer has High Burnout).
+   - Generated Action: *"Reallocate tickets or extend sprint deadline to alleviate high burnout risk."*
+3. Rule: `Blocked Flow`
+   - Trigger: `team.blockedIssues > 3`.
+   - Generated Action: *"Schedule an immediate unblocking swarm session."*
+4. Output: The raw strings are passed in the JSON context payload to the LLM, which simply repeats/formats them for the user.
