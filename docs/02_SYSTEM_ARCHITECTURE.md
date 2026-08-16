@@ -40,36 +40,36 @@ flowchart TD
         LLM[AWS Bedrock]
     end
 
-    %% Flow
+    %% Control / Data Flow
     UI -->|HTTP Requests| API
     
-    API -->|Dashboard Data| AE
-    API -->|Chat Query| LG
+    API -->|Get Dashboard Data| AE
+    API -->|Post Chat Query| LG
     
-    LG --> IC
-    LG --> EE
-    IC --> CB
-    EE --> CB
+    LG -->|1. Classify| IC
+    LG -->|2. Extract| EE
+    IC -->|3. Route & Context| CB
+    EE -->|3. Entities| CB
     
-    CB -->|Query Scoped Data| AE
-    CB -->|Query Scoped Data| FE
-    CB -->|Query Scoped Data| RE
-    CB -->|Scenario| SE
+    CB -->|Get Analytics| AE
+    CB -->|Get Forecasts| FE
+    CB -->|Get Recs| RE
+    CB -->|Run Scenario| SE
     
-    AE --> BRE
+    AE -->|Apply Rules & Ranks| BRE
     
-    AE -.->|Read| DL
-    BRE -.->|Read| CL
+    AE -.->|Load Data| DL
+    BRE -.->|Load Config| CL
     DL -.->|Parse| DS
     CL -.->|Parse| CFG
     
-    CB -->|Token-Optimized JSON| LG
+    CB -->|Return Scoped JSON| LG
     
-    LG -->|System Prompt + Context + Query| LLM
+    LG -->|System Prompt + Context| LLM
     LLM -->|Natural Language Explanation| LG
     
-    LG -->|Response| API
-    API -->|JSON| UI
+    LG -->|Chat Response| API
+    API -->|JSON Response| UI
 ```
 
 ## Core Subsystems
