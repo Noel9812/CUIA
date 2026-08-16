@@ -13,61 +13,83 @@ flowchart TD
     classDef storage fill:#d97706,stroke:#92400e,stroke-width:2px,color:#fff;
     classDef external fill:#be123c,stroke:#881337,stroke-width:2px,color:#fff;
 
-    %% Elements
-    UI["💻 Dashboard & Chat UI (React/Vite)"]:::frontend
-    
-    API["⚙️ FastAPI Routers"]:::backend
-    
-    subgraph AI ["AI Orchestration (LangGraph)"]
-        direction TB
-        LG["🧠 Orchestrator"]:::ai
-        IC["🎯 Intent Classifier"]:::ai
-        EE["🔍 Entity Extractor"]:::ai
-        CB["📦 Context Builders"]:::ai
+    subgraph Frontend ["Frontend (React/Vite)"]
+        UI["💻 Dashboard & Chat UI"]:::frontend
     end
-    
-    subgraph Analytics ["Deterministic Analytics Layer"]
-        direction TB
-        AE["📊 Analytics Engine"]:::backend
-        FE["📈 Forecast Engine"]:::backend
-        RE["💡 Recommendation Engine"]:::backend
-        SE["🧪 Simulation Engine"]:::backend
-        BRE["⚖️ Business Rules Engine"]:::backend
-    end
-    
-    subgraph Data ["Data & Configuration"]
-        direction LR
-        DS[("dataset.json")]:::storage
-        CFG[("Config JSONs")]:::storage
-    end
-    
-    LLM["☁️ AWS Bedrock"]:::external
 
-    %% Routing
-    UI <-->|1. HTTP / JSON| API
+    subgraph Backend ["Backend (FastAPI)"]
+        API["⚙️ API Routers"]:::backend
+        
+        subgraph AI_Layer ["AI Orchestration"]
+            LG["🧠 LangGraph Orchestrator"]:::ai
+            IC["🎯 Intent Classifier"]:::ai
+            EE["🔍 Entity Extractor"]:::ai
+            CB["📦 Context Builders"]:::ai
+        end
+        
+        subgraph Analytics_Layer ["Deterministic Analytics"]
+            AE["📊 Analytics Engine"]:::backend
+            BRE["⚖️ Business Rules Engine"]:::backend
+            FE["📈 Forecast Engine"]:::backend
+            RE["💡 Recommendation Engine"]:::backend
+            SE["🧪 Simulation Engine"]:::backend
+        end
+        
+        subgraph Data_Layer ["Data & Config"]
+            DS[("dataset.json")]:::storage
+            CFG[("Config JSONs")]:::storage
+            DL["Dataset Loader"]:::storage
+            CL["Config Loader"]:::storage
+        end
+    end
+
+    subgraph External ["External Services"]
+        LLM["☁️ AWS Bedrock"]:::external
+    end
+
+    %% Control / Data Flow
+    UI -->|HTTP Requests| API
     
     %% Dashboard Flow
-    API <-->|2a. Get Dashboard Data| AE
-    AE <-->|Apply Rules| BRE
+    API -->|Get Dashboard Data| AE
+    AE -.->|Return Analytics JSON| API
     
     %% Copilot Flow
-    API <-->|2b. Chat Query / Response| LG
+    API -->|Post Chat Query| LG
     
-    LG <-->|Classify| IC
-    LG <-->|Extract| EE
-    LG <-->|Route| CB
+    LG -->|1. Classify| IC
+    IC -.->|Intent| LG
     
-    CB <-->|Fetch Analytics| AE
-    CB <-->|Fetch Forecasts| FE
-    CB <-->|Fetch Recs| RE
-    CB <-->|Run Scenario| SE
+    LG -->|2. Extract| EE
+    EE -.->|Entities| LG
     
-    %% Data Loading
-    AE -.->|Loads| DS
-    BRE -.->|Loads| CFG
+    LG -->|3. Route & Build Context| CB
     
-    %% LLM Execution
-    LG <-->|3. Prompt + JSON Context| LLM
+    CB -->|Fetch Analytics| AE
+    CB -->|Fetch Forecasts| FE
+    CB -->|Fetch Recs| RE
+    CB -->|Run Scenario| SE
+    
+    AE -.->|Raw Data| CB
+    FE -.->|Raw Data| CB
+    RE -.->|Raw Data| CB
+    SE -.->|Raw Data| CB
+    
+    AE -->|Apply Rules & Ranks| BRE
+    BRE -.->|Ranked Data| AE
+    
+    AE -.->|Load Data| DL
+    BRE -.->|Load Config| CL
+    DL -.->|Parse| DS
+    CL -.->|Parse| CFG
+    
+    CB -.->|Return Scoped JSON| LG
+    
+    LG -->|4. System Prompt + Context| LLM
+    LLM -.->|5. Natural Language Explanation| LG
+    
+    LG -.->|Return Chat Response| API
+    API -.->|JSON Response| UI
 ```
 
 ## Core Subsystems
