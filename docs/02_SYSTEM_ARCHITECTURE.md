@@ -6,83 +6,68 @@ CUIA is built on a strict "deterministic-first" architecture. The business logic
 
 ```mermaid
 flowchart TD
-    subgraph Frontend ["Frontend (React/Vite)"]
-        UI[Dashboard & Chat UI]
-    end
+    %% Node Styling
+    classDef frontend fill:#2563eb,stroke:#1e3a8a,stroke-width:2px,color:#fff;
+    classDef backend fill:#059669,stroke:#064e3b,stroke-width:2px,color:#fff;
+    classDef ai fill:#7c3aed,stroke:#4c1d95,stroke-width:2px,color:#fff;
+    classDef storage fill:#d97706,stroke:#92400e,stroke-width:2px,color:#fff;
+    classDef external fill:#be123c,stroke:#881337,stroke-width:2px,color:#fff;
 
-    subgraph Backend ["Backend (FastAPI)"]
-        API[API Routers]
-        
-        subgraph AI_Layer ["AI Orchestration"]
-            LG[LangGraph Orchestrator]
-            IC[Intent Classifier]
-            EE[Entity Extractor]
-            CB[Context Builders]
-        end
-        
-        subgraph Analytics_Layer ["Deterministic Analytics"]
-            AE[Analytics Engine]
-            BRE[Business Rules Engine]
-            FE[Forecast Engine]
-            RE[Recommendation Engine]
-            SE[Simulation Engine]
-        end
-        
-        subgraph Data_Layer ["Data & Config"]
-            DS[(dataset.json)]
-            CFG[(Config JSONs)]
-            DL[Dataset Loader]
-            CL[Config Loader]
-        end
+    %% Elements
+    UI["💻 Dashboard & Chat UI (React/Vite)"]:::frontend
+    
+    API["⚙️ FastAPI Routers"]:::backend
+    
+    subgraph AI ["AI Orchestration (LangGraph)"]
+        direction TB
+        LG["🧠 Orchestrator"]:::ai
+        IC["🎯 Intent Classifier"]:::ai
+        EE["🔍 Entity Extractor"]:::ai
+        CB["📦 Context Builders"]:::ai
     end
-
-    subgraph External ["External Services"]
-        LLM[AWS Bedrock]
+    
+    subgraph Analytics ["Deterministic Analytics Layer"]
+        direction TB
+        AE["📊 Analytics Engine"]:::backend
+        FE["📈 Forecast Engine"]:::backend
+        RE["💡 Recommendation Engine"]:::backend
+        SE["🧪 Simulation Engine"]:::backend
+        BRE["⚖️ Business Rules Engine"]:::backend
     end
+    
+    subgraph Data ["Data & Configuration"]
+        direction LR
+        DS[("dataset.json")]:::storage
+        CFG[("Config JSONs")]:::storage
+    end
+    
+    LLM["☁️ AWS Bedrock"]:::external
 
-    %% Control / Data Flow
-    UI -->|HTTP Requests| API
+    %% Routing
+    UI <-->|1. HTTP / JSON| API
     
     %% Dashboard Flow
-    API -->|Get Dashboard Data| AE
-    AE -.->|Return Analytics JSON| API
+    API <-->|2a. Get Dashboard Data| AE
+    AE <-->|Apply Rules| BRE
     
     %% Copilot Flow
-    API -->|Post Chat Query| LG
+    API <-->|2b. Chat Query / Response| LG
     
-    LG -->|1. Classify| IC
-    IC -.->|Intent| LG
+    LG <-->|Classify| IC
+    LG <-->|Extract| EE
+    LG <-->|Route| CB
     
-    LG -->|2. Extract| EE
-    EE -.->|Entities| LG
+    CB <-->|Fetch Analytics| AE
+    CB <-->|Fetch Forecasts| FE
+    CB <-->|Fetch Recs| RE
+    CB <-->|Run Scenario| SE
     
-    LG -->|3. Route & Build Context| CB
+    %% Data Loading
+    AE -.->|Loads| DS
+    BRE -.->|Loads| CFG
     
-    CB -->|Fetch Analytics| AE
-    CB -->|Fetch Forecasts| FE
-    CB -->|Fetch Recs| RE
-    CB -->|Run Scenario| SE
-    
-    AE -.->|Raw Data| CB
-    FE -.->|Raw Data| CB
-    RE -.->|Raw Data| CB
-    SE -.->|Raw Data| CB
-    
-    AE -->|Apply Rules & Ranks| BRE
-    BRE -.->|Ranked Data| AE
-    
-    AE -.->|Load Data| DL
-    BRE -.->|Load Config| CL
-    DL -.->|Parse| DS
-    CL -.->|Parse| CFG
-    
-    CB -.->|Return Scoped JSON| LG
-    
-    LG -->|4. System Prompt + Context| LLM
-    LLM -.->|5. Natural Language Explanation| LG
-    
-    LG -.->|Return Chat Response| API
-    API -.->|JSON Response| UI
+    %% LLM Execution
+    LG <-->|3. Prompt + JSON Context| LLM
 ```
 
 ## Core Subsystems
