@@ -58,6 +58,8 @@ class ContextBuilder:
             result["org"] = {
                 "engineers": org["totalEngineers"],
                 "util": org["overallUtilization"],
+                "capacityHours": org.get("totalCapacityHours"),
+                "loggedHours": org.get("totalLoggedHours"),
                 "health": org["overallTeamHealth"],
                 "burnout": org["burnoutRiskCount"],
                 "blocked": org["blockedIssues"],
@@ -286,6 +288,8 @@ class ContextBuilder:
             "id": t["id"],
             "name": t["name"],
             "util": t["utilization"],
+            "cap": t.get("capacityHours"),
+            "logged": t.get("loggedHours"),
             "health": t["healthScore"],
             "vel": t["velocity"],
             "blocked": t["blockedIssues"],

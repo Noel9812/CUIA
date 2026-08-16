@@ -25,7 +25,7 @@ def chat_copilot(request: ChatRequest):
             )
         
         logger.info("Copilot chat: persona=%s, question_length=%d", request.persona, len(request.question))
-        answer = graph.chat(request.question, request.persona)
+        answer, context_out = graph.chat(request.question, request.persona, request.conversation_context)
         
         # Detect and structure errors from graph.chat
         if answer.startswith("Error communicating with AI:"):
@@ -38,9 +38,9 @@ def chat_copilot(request: ChatRequest):
             elif "timeout" in error_str.lower():
                 raise HTTPException(status_code=504, detail={"error_type": "Timeout", "message": error_str})
             else:
-                raise HTTPException(status_code=500, detail={"error_type": "AIServiceError", "message": error_str})
+                raise HTTPException(status_code=500, detail={"error_type": "AIServiceError", "message": "I couldn't retrieve that workforce metric right now. Please try again."})
         
-        return ChatResponse(answer=answer)
+        return ChatResponse(answer=answer, conversation_context=context_out)
         
     except HTTPException:
         raise
@@ -48,5 +48,5 @@ def chat_copilot(request: ChatRequest):
         logger.error("Copilot error: %s", str(e))
         raise HTTPException(
             status_code=500,
-            detail={"error_type": "CopilotError", "message": str(e)}
+            detail={"error_type": "CopilotError", "message": "I'm sorry, I couldn't process that request right now. Please try again later."}
         )

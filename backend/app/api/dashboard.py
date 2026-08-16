@@ -65,12 +65,19 @@ def get_delivery_dashboard(managerId: str):
             or r.supportingMetrics.get("engineerId") in eng_ids
         ]
         
-        # Compute delivery manager KPIs from analytics (no recomputation)
+        # Compute delivery manager KPIs from analytics
         count = len(engineers) if engineers else 1
+        total_cap = sum(e["sprintCapacity"] for e in engineers)
+        total_logged = sum(e["loggedHours"] for e in engineers)
+        util = (total_logged / total_cap * 100) if total_cap > 0 else 0.0
+
+        total_issues = sum(e.get("activeTickets", 0) + e.get("blockedTickets", 0) for e in engineers) # approximation or we use sprint completion
+        # We can also compute sprint completion based on issues if needed, but keeping it simple
+        
         dm_kpis = {
             "healthScore": sum(t["healthScore"] for t in teams) / max(1, len(teams)),
-            "utilization": sum(e["utilization"] for e in engineers) / count,
-            "remainingCapacity": sum(e["sprintCapacity"] - e["loggedHours"] for e in engineers),
+            "utilization": round(util, 2),
+            "remainingCapacity": round(total_cap - total_logged, 2),
             "burnoutRiskCount": sum(1 for e in engineers if e["burnoutRisk"] == "High"),
             "dependencyRisks": sum(t["dependencyRisk"] for t in teams),
             "productivity": sum(e["productivity"] for e in engineers),

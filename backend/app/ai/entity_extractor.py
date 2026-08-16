@@ -87,7 +87,7 @@ class EntityExtractor:
             
             cls._initialized = True
             logger.info("EntityExtractor initialized. %d engineers, %d teams, %d skills.", 
-                        len(cls._name_to_eng_id), len(cls._name_to_team_id), len(cls._all_skills))
+                        len(dataset.engineers), len(dataset.teams), len(cls._all_skills))
         except Exception as e:
             logger.error("Failed to initialize EntityExtractor: %s", str(e))
 
@@ -109,10 +109,11 @@ class EntityExtractor:
         # 3. Extract explicit entities (engineers, teams)
         # Tokenize preserving some punctuation for strict matching
         q_clean = re.sub(r"[?!.,;:]+", " ", q_norm)
-        tokens = set(q_clean.split())
+        # Strip possessive 's from words
+        words = [w.replace("'s", "") for w in q_clean.split()]
+        tokens = set(words)
         
         # Bigrams for two-word names/teams
-        words = q_clean.split()
         bigrams = set(f"{words[i]} {words[i+1]}" for i in range(len(words)-1))
         
         # Match Engineers

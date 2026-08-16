@@ -53,9 +53,16 @@ GRATITUDE_PATTERNS = [
 ]
 
 IDENTITY_PATTERNS = [
-    "who are you", "what are you", "what can you do", "what do you do",
-    "how can you help", "what is cuia", "what's cuia", "tell me about yourself",
+    "who are you", "what are you", "what do you do",
+    "what is cuia", "what's cuia", "tell me about yourself",
     "introduce yourself", "your name", "what is your name",
+    "what is your role", "your job", "what is your job",
+    "what's your job", "what's your role"
+]
+
+CAPABILITY_PATTERNS = [
+    "what can you do", "how can you help", "how can you help me",
+    "what can you help with", "what are your capabilities", "what can you help me with"
 ]
 
 SMALLTALK_PATTERNS = [
@@ -64,10 +71,12 @@ SMALLTALK_PATTERNS = [
 ]
 
 CONVERSATIONAL_GROUPS = {
+    # Check higher-specificity patterns first to prevent fuzzy false-positives
+    "identity": IDENTITY_PATTERNS,
+    "capability": CAPABILITY_PATTERNS,
     "greeting": GREETING_PATTERNS,
     "farewell": FAREWELL_PATTERNS,
     "gratitude": GRATITUDE_PATTERNS,
-    "identity": IDENTITY_PATTERNS,
     "smalltalk": SMALLTALK_PATTERNS,
 }
 
@@ -347,7 +356,10 @@ INTENT_KEYWORD_MAP: Dict[str, list[tuple[str, int]]] = {
     "reporting": REPORTING_KEYWORDS,
 }
 
-VALID_INTENTS = {"analytics", "forecast", "recommendation", "whatif", "reporting", "malicious", "greeting"}
+VALID_INTENTS = {
+    "analytics", "forecast", "recommendation", "whatif", "reporting",
+    "malicious", "greeting", "identity", "capability", "out_of_scope"
+}
 
 
 # ──────────────────────────────────────────────
@@ -358,17 +370,23 @@ def _detect_conversational(question: str) -> Optional[str]:
     """
     Detect if the question is conversational (greeting, farewell, thanks, etc.).
     Returns the conversational subtype or None.
+    Uses exact/prefix/suffix match first; fuzzy match requires word boundary.
     """
     q = question.lower().strip()
     q_clean = q.rstrip("?!.,;: ")
 
     for conv_type, patterns in CONVERSATIONAL_GROUPS.items():
         for pattern in patterns:
-            if q_clean == pattern or q_clean.startswith(pattern + " ") or q_clean.endswith(" " + pattern):
+            # Exact match or bounded prefix/suffix
+            if q_clean == pattern:
                 return conv_type
-            # Also match if the entire question IS the pattern
-            if pattern in q_clean and len(q_clean) < len(pattern) + 15:
+            if q_clean.startswith(pattern + " ") or q_clean.endswith(" " + pattern):
                 return conv_type
+            # Fuzzy: pattern as whole word and question is short
+            if len(q_clean) < len(pattern) + 15:
+                # Require word-boundary match to avoid substring false-positives
+                if re.search(r'\b' + re.escape(pattern) + r'\b', q_clean):
+                    return conv_type
     return None
 
 
@@ -386,11 +404,21 @@ def classify_intent(question: str) -> Tuple[str, float, bool]:
     # Step 0: Normalize synonyms and fix typos
     q = SynonymEngine.normalize(question)
 
-    # Step 1: Check for conversational intent (Part 17)
+    # Step 1: Check for conversational intent
     conv_type = _detect_conversational(q)
     if conv_type:
-        logger.info("Conversational intent detected: %s", conv_type)
-        return ("greeting", 10.0, False)
+        # Map conversational subtypes to VALID_INTENTS
+        intent_map = {
+            "greeting": "greeting",
+            "farewell": "greeting",
+            "gratitude": "greeting",
+            "smalltalk": "greeting",
+            "identity": "identity",
+            "capability": "capability",
+        }
+        resolved = intent_map.get(conv_type, "greeting")
+        logger.info("Conversational intent detected: %s → %s", conv_type, resolved)
+        return (resolved, 10.0, False)
 
     # Step 2: Security check
     malicious_score = 0

@@ -270,14 +270,14 @@ class SynonymEngine:
 
         q = question.lower().strip()
 
-        # Step 1: Fix typos (word-level replacement)
-        words = q.split()
-        corrected_words = [TYPO_CORRECTIONS.get(w, w) for w in words]
-        q = " ".join(corrected_words)
-
-        # Step 2: Strip redundant punctuation for matching
-        q_clean = re.sub(r"[?!.,;:]+$", "", q).strip()
+        # Step 1: Strip redundant punctuation for matching
+        q_clean = re.sub(r"[?!.,;:]+", " ", q).strip()
         q_clean = re.sub(r"\s+", " ", q_clean)
+
+        # Step 2: Fix typos (word-level replacement)
+        words = q_clean.split()
+        corrected_words = [TYPO_CORRECTIONS.get(w, w) for w in words]
+        q_clean = " ".join(corrected_words)
 
         # Step 3: Replace multi-word synonyms (longest first for greedy matching)
         sorted_synonyms = sorted(cls._synonym_map.keys(), key=len, reverse=True)

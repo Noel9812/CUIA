@@ -1,56 +1,38 @@
-# Capacity & Utilization Intelligence Agent (CUIA)
+# CUIA — Capacity & Utilization Intelligence Agent
 
-## Overview
-CUIA is a Proof of Concept (POC) demonstrating how engineering workforce data can be transformed into deterministic workforce insights and explained through an AI Copilot. 
+Welcome to the **CUIA (Capacity & Utilization Intelligence Agent)** project documentation. This is the authoritative technical reference for the current CUIA Proof of Concept (POC).
 
-The application is built with a highly secure architecture enforcing server-side persona isolation, preventing data leakage across organizational scopes. The AI Copilot uses LangGraph to securely route intent to deterministic backend calculation tools, meaning it strictly functions as an "Explainer" and is forbidden from hallucinating analytics.
+## What is CUIA?
 
-## Key Features
-- **Persona-Based Scope Isolation:** Real-time data segregation between Leadership (org-wide) and Delivery Managers (team-specific).
-- **Deterministic Analytics Engine:** Accurate calculations for capacity, utilization, velocity, and burnout risk.
-- **AI Copilot (LangGraph Workflow):** Intent-classified, safe AI interaction backed by Gemini 2.0 Flash. Features token optimization, prompt guardrails, and output validation to prevent hallucinated metrics.
-- **Reporting Engine:** Generate daily, weekly, and monthly PDF reports based on active persona scope.
-- **Advanced UI/UX:** Built with React, Tailwind CSS, Recharts, and Lucide icons for a premium, accessible user experience.
+CUIA is a workforce analytics and intelligence platform designed to replace manual, spreadsheet-driven utilization tracking with an automated, data-driven system. It aggregates simulated Jira data to provide real-time visibility into engineering capacity, workload distribution, team health, and delivery risks.
 
-## Technology Stack
-- **Frontend**: React, TypeScript, Tailwind CSS, Recharts, Vite
-- **Backend**: FastAPI, Pandas, LangChain/LangGraph, Google Gemini API
-- **Infrastructure**: Docker, Docker Compose, Nginx
+The POC demonstrates how deterministic backend analytics can be combined with a scoped, token-optimized AI Copilot (powered by LangGraph and AWS Bedrock) to answer natural language queries securely and reliably.
 
+## Target Audience
 
-## Prerequisites
-- Docker and Docker Compose
-- Google Gemini API Key (Gemini 2.0 Flash or higher recommended)
+This documentation is designed for:
+- **Developers** needing to understand the architecture, data flow, and code structure.
+- **Technical Reviewers** auditing the system for security, determinism, and mathematical correctness.
+- **Delivery Managers & Leadership** exploring the capabilities of the system.
 
-## Running Locally
+## Documentation Structure
 
-1. **Configure Environment Variables:**
-   Copy the example environment file and add your Gemini API Key.
-   ```bash
-   cp .env.example .env
-   # Edit .env and paste your GEMINI_API_KEY
-   ```
+The documentation is structured to guide you from high-level architecture down to specific component implementations. We recommend reading in the following order:
 
-2. **Start the Application:**
-   Run the containers using Docker Compose. The backend includes an active health-check that will automatically halt startup if your API key is missing or invalid.
-   ```bash
-   docker compose up --build
-   ```
+1. [Project Overview](docs/01_PROJECT_OVERVIEW.md) - Business problem, personas, and tech stack.
+2. [System Architecture](docs/02_SYSTEM_ARCHITECTURE.md) - Subsystems and responsibilities.
+3. [End-to-End Application Flow](docs/03_END_TO_END_APPLICATION_FLOW.md) - How a request travels through the system.
+4. [Data Model & Data Flow](docs/04_DATA_MODEL_AND_DATA_FLOW.md) - Entities, relationships, and JSON schema.
+5. [Metrics & Analytics](docs/05_METRICS_AND_ANALYTICS.md) - Mathematical formulas and business definitions.
+6. [AI Copilot](docs/06_AI_COPILOT.md) - Overview of the natural language interface.
+7. [LangGraph Architecture](docs/07_LANGGRAPH_ARCHITECTURE.md) - Deep dive into the AI orchestration workflow.
+8. [Security & Persona Isolation](docs/08_SECURITY_AND_PERSONA_ISOLATION.md) - How data is strictly scoped per user.
+9. [API & System Integration](docs/09_API_AND_SYSTEM_INTEGRATION.md) - FastAPI endpoints and frontend integration.
+10. [Testing & Validation](docs/10_TESTING_AND_VALIDATION.md) - Assurance of mathematical correctness and AI behavior.
+11. [Configuration & Business Rules](docs/11_CONFIGURATION_AND_BUSINESS_RULES.md) - Thresholds, weights, and JSON configs.
+12. [Cost Optimization](docs/12_COST_OPTIMIZATION.md) - Minimizing LLM usage and token consumption.
+13. [POC Limitations & Future](docs/13_POC_LIMITATIONS_AND_FUTURE.md) - What the POC does and what production needs.
+14. [Demo Guide](docs/14_DEMO_GUIDE.md) - How to effectively present the CUIA POC.
+15. [Engineering Learnings](docs/15_ENGINEERING_LEARNINGS.md) - Architectural lessons from building CUIA.
 
-3. **Access the Application:**
-   - **Frontend UI**: http://localhost
-   - **API Docs (Swagger)**: http://localhost/api/docs
-   - **AI Subsystem Health Check**: http://localhost/api/health/ai
-
-## Security & Rate Limits
-- The AI Copilot implements **Token Optimization**, compressing heavy JSON payloads before sending them to the LLM. 
-- If you encounter a `429 Too Many Requests` error, the UI will gracefully handle it. This happens if you hit the Free Tier Request Per Minute limit on Google AI Studio. Wait 60 seconds and try again.
-
-## API Endpoints
-- `GET /api/analytics`: Raw calculated metrics
-- `GET /api/dashboard/leadership`: Organization KPIs
-- `GET /api/dashboard/delivery?managerId=dm-1`: Manager-specific KPIs
-- `GET /api/recommendations`: AI/Rule-based recommendations
-- `GET /api/reports/download/{type}`: Generate Reports (Daily/Weekly/Monthly)
-- `POST /api/copilot/chat`: Chat with AI Copilot
-- `GET /api/health/ai`: AI System Diagnostic Status
+_Note: All historical documentation and previous audit reports have been moved to the `docs/archive/` directory to preserve the history without polluting the current source of truth._

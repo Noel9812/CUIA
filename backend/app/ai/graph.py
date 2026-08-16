@@ -46,6 +46,7 @@ class AgentState(TypedDict):
     entities: Optional[dict]      # Serialized ExtractedEntities (for state transport)
     scoped_context: Optional[str]
     response: Optional[str]
+    conversation_context: Optional[dict]
 
 
 class CopilotGraph:
@@ -87,6 +88,11 @@ class CopilotGraph:
                 "whatif": "whatif_tool",
                 "reporting": "reporting_tool",
                 "malicious": END,
+                "greeting": END,
+                "identity": END,
+                "capability": END,
+                "out_of_scope": END,
+                "unknown": END,
             }
         )
 
@@ -114,9 +120,39 @@ class CopilotGraph:
 
         # Step 1: Extract entities (always, no LLM)
         entities = EntityExtractor.extract(question)
+        
+        # Step 1.5: Conversational Follow-up Handling
+        conversation_context = state.get("conversation_context") or {}
+        previous_intent = conversation_context.get("previous_intent")
+        previous_entities = conversation_context.get("previous_entities", {})
+        
+        # Merge previous entities if not explicitly overridden in current question
+        if previous_entities:
+            if not entities.team_ids and previous_entities.get("team_ids"):
+                entities.team_ids = set(previous_entities["team_ids"])
+            if not entities.engineer_ids and previous_entities.get("engineer_ids"):
+                entities.engineer_ids = set(previous_entities["engineer_ids"])
+            if not entities.sprints and previous_entities.get("sprints"):
+                entities.sprints = set(previous_entities["sprints"])
+            if not entities.skills and previous_entities.get("skills"):
+                entities.skills = set(previous_entities["skills"])
 
-        # Step 2: Weighted keyword classification
-        intent, score, needs_llm = classify_intent(question)
+        # Check for explicit 'why' follow-up
+        q_clean = question.lower().strip().strip('?!. ')
+        if q_clean in ('why', 'why is that', 'explain', 'tell me why', 'how come', 'how') and previous_intent:
+            intent = previous_intent
+            score = 10.0
+            needs_llm = False
+            logger.info("Explicit conversational follow-up detected. Inheriting intent: %s", intent)
+        else:
+            # Step 2: Weighted keyword classification
+            intent, score, needs_llm = classify_intent(question)
+            
+            # Inherit previous intent if current query is ambiguous but introduces new entities (e.g. "What about Team Alpha?")
+            if intent == "unknown" and previous_intent and (entities.team_ids or entities.engineer_ids):
+                intent = previous_intent
+                needs_llm = False
+                logger.info("Conversational context inheritance (new entity). Inheriting intent: %s", intent)
 
         # Handle malicious immediately
         if intent == "malicious":
@@ -142,7 +178,7 @@ class CopilotGraph:
                     logger.info("Intent classified (LLM fallback): %s", intent)
                 else:
                     # LLM returned garbage, use keyword result or default
-                    intent = intent if intent != "unknown" else "analytics"
+                    intent = intent if intent != "unknown" else "out_of_scope"
                     logger.warning(
                         "LLM returned invalid intent '%s', using: %s",
                         llm_response, intent
@@ -161,18 +197,46 @@ class CopilotGraph:
                     str(e), intent
                 )
                 if intent == "unknown":
-                    intent = "analytics"
+                    intent = "out_of_scope"
 
         elif intent == "unknown":
             # No LLM available and no keyword match
-            intent = "analytics"
-            logger.info("Intent defaulted to analytics (no LLM available).")
+            intent = "out_of_scope"
+            logger.info("Intent defaulted to out_of_scope (no LLM available).")
 
         logger.info(
             "Intent resolved: %s (score=%.1f, llm_used=%s, entities=%s)",
             intent, score, needs_llm and self.bedrock.is_available,
             bool(entities.has_any())
         )
+
+        if intent == "greeting":
+            return {
+                "intent": "greeting",
+                "entities": entities.to_dict(),
+                "response": "Hello! What would you like to analyze?",
+            }
+            
+        if intent == "identity":
+            return {
+                "intent": "identity",
+                "entities": entities.to_dict(),
+                "response": "I'm the CUIA workforce analytics Copilot. I help authorized managers and leadership understand team capacity, utilization, workload, health, performance, and related workforce insights."
+            }
+            
+        if intent == "capability":
+            return {
+                "intent": "capability",
+                "entities": entities.to_dict(),
+                "response": "I can help you analyze:\n- utilization and capacity\n- workload and velocity\n- team health and burnout risk\n- blocked work\n- engineer/team performance\n- workforce trends and recommendations\n\nAsk me a question about your authorized workforce data."
+            }
+            
+        if intent == "out_of_scope" or intent == "unknown":
+            return {
+                "intent": "out_of_scope",
+                "entities": entities.to_dict(),
+                "response": "I can help with CUIA workforce analytics, but not with that request.",
+            }
 
         return {
             "intent": intent,
@@ -242,7 +306,7 @@ class CopilotGraph:
                 "response": "Error: AI service is not available. Check AWS Bedrock configuration."
             }
 
-        if state.get("intent") == "malicious":
+        if state.get("intent") in ("malicious", "greeting", "identity", "capability", "out_of_scope", "unknown"):
             return state
 
         scoped_context = state.get("scoped_context", "{}")
@@ -275,22 +339,27 @@ class CopilotGraph:
     # Public chat interface
     # ──────────────────────────────────────────────
 
-    def chat(self, question: str, persona: str = "leadership") -> str:
+    def chat(self, question: str, persona: str = "leadership", conversation_context: Optional[dict] = None) -> tuple[str, dict]:
         """
         Main chat entry point.
 
         Args:
             question: The user's natural language question.
             persona: "leadership" or a delivery manager ID (e.g., "dm-1").
+            conversation_context: Context from the previous turns.
 
         Returns:
-            Natural language response from the AI.
+            Tuple of (response, updated_conversation_context).
         """
         if not self.bedrock.is_available:
-            return "Error: AI service is not available. Check AWS Bedrock configuration."
+            return "Error: AI service is not available. Check AWS Bedrock configuration.", {}
 
         start = time.monotonic()
-        initial_state = {"question": question, "persona": persona}
+        initial_state = {
+            "question": question, 
+            "persona": persona,
+            "conversation_context": conversation_context or {}
+        }
 
         try:
             result = self.app.invoke(initial_state)
@@ -301,8 +370,15 @@ class CopilotGraph:
                 persona, result.get("intent", "unknown"), latency_ms
             )
 
-            return result.get("response", "I was unable to generate a response.")
+            # Build new conversation context
+            new_ctx = {
+                "persona": persona,
+                "previous_intent": result.get("intent"),
+                "previous_entities": result.get("entities", {})
+            }
+
+            return result.get("response", "I was unable to generate a response."), new_ctx
 
         except Exception as e:
             logger.error("Chat error: %s", str(e))
-            return f"Error communicating with AI: {str(e)}"
+            return f"Error communicating with AI: {str(e)}", {}

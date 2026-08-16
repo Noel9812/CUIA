@@ -80,6 +80,8 @@ class Recommendation(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     persona: str = "leadership"
+    conversation_context: Optional[Dict[str, Any]] = None
 
 class ChatResponse(BaseModel):
     answer: str
+    conversation_context: Optional[Dict[str, Any]] = None

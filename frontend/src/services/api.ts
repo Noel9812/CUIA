@@ -25,8 +25,16 @@ export const fetchEngineerDetails = async (engineerId: string): Promise<Engineer
   return response.data;
 };
 
-export const chatWithCopilot = async (question: string, persona: string = 'leadership') => {
-  const response = await api.post('/copilot/chat', { question, persona });
+export const chatWithCopilot = async (
+  question: string,
+  persona: string = 'leadership',
+  conversationContext?: Record<string, unknown>
+) => {
+  const response = await api.post('/copilot/chat', {
+    question,
+    persona,
+    conversation_context: conversationContext ?? null,
+  });
   return response.data;
 };
 

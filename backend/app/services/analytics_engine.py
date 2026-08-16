@@ -391,7 +391,9 @@ class AnalyticsEngine:
             t_spof = sum(1 for v in t_skill_counts.values() if v == 1)
             
             count = len(t_eng)
-            avg_util = sum(e["utilization"] for e in t_eng) / count if count > 0 else 0.0
+            total_cap = sum(e["sprintCapacity"] for e in t_eng)
+            total_logged = sum(e["loggedHours"] for e in t_eng)
+            team_util = (total_logged / total_cap * 100) if total_cap > 0 else 0.0
             avg_health = sum(e["health"] for e in t_eng) / count if count > 0 else 100.0
             avg_est_acc = sum(e["estimationAccuracy"] for e in t_eng) / count if count > 0 else 100.0
             total_prod = sum(e["productivity"] for e in t_eng)
@@ -413,7 +415,9 @@ class AnalyticsEngine:
                 "id": team.id,
                 "name": team.name,
                 "managerId": team.managerId,
-                "utilization": round(avg_util, 2),
+                "utilization": round(team_util, 2),
+                "capacityHours": round(total_cap, 2),
+                "loggedHours": round(total_logged, 2),
                 "productivity": round(total_prod, 2),
                 "healthScore": round(avg_health, 2),
                 "estimationAccuracy": round(avg_est_acc, 2),
@@ -426,7 +430,7 @@ class AnalyticsEngine:
                 "velocity": total_velocity,
                 "averageResolutionTime": round(avg_res_time, 1),
                 "sprintCompletion": round(avg_sprint_completion, 2),
-                "forecastStatus": "Balanced" if avg_util < forecast_risk_threshold else "Risk",
+                "forecastStatus": "Balanced" if team_util < forecast_risk_threshold else "Risk",
             })
         
         return team_metrics
@@ -490,7 +494,9 @@ class AnalyticsEngine:
         """Compute organization-wide KPIs."""
         
         count = len(eng_metrics)
-        avg_util = sum(e["utilization"] for e in eng_metrics) / count if count > 0 else 0
+        total_cap = sum(e["sprintCapacity"] for e in eng_metrics)
+        total_logged = sum(e["loggedHours"] for e in eng_metrics)
+        org_util = (total_logged / total_cap * 100) if total_cap > 0 else 0.0
         total_prod = sum(e["productivity"] for e in eng_metrics)
         avg_est_acc = sum(e["estimationAccuracy"] for e in eng_metrics) / count if count > 0 else 0
         avg_health = sum(t["healthScore"] for t in team_metrics) / len(team_metrics) if team_metrics else 100
@@ -512,7 +518,9 @@ class AnalyticsEngine:
             "teams": len(dataset.teams),
             "activeJiraIssues": len(active_issues),
             "activeSprints": len(active_sprint_set),
-            "overallUtilization": round(avg_util, 2),
+            "overallUtilization": round(org_util, 2),
+            "totalCapacityHours": round(total_cap, 2),
+            "totalLoggedHours": round(total_logged, 2),
             "overallProductivity": round(total_prod, 2),
             "overallEstimationAccuracy": round(avg_est_acc, 2),
             "overallTeamHealth": round(avg_health, 2),
