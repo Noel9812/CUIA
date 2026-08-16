@@ -43,33 +43,46 @@ flowchart TD
     %% Control / Data Flow
     UI -->|HTTP Requests| API
     
+    %% Dashboard Flow
     API -->|Get Dashboard Data| AE
+    AE -.->|Return Analytics JSON| API
+    
+    %% Copilot Flow
     API -->|Post Chat Query| LG
     
     LG -->|1. Classify| IC
-    LG -->|2. Extract| EE
-    IC -->|3. Route & Context| CB
-    EE -->|3. Entities| CB
+    IC -.->|Intent| LG
     
-    CB -->|Get Analytics| AE
-    CB -->|Get Forecasts| FE
-    CB -->|Get Recs| RE
+    LG -->|2. Extract| EE
+    EE -.->|Entities| LG
+    
+    LG -->|3. Route & Build Context| CB
+    
+    CB -->|Fetch Analytics| AE
+    CB -->|Fetch Forecasts| FE
+    CB -->|Fetch Recs| RE
     CB -->|Run Scenario| SE
     
+    AE -.->|Raw Data| CB
+    FE -.->|Raw Data| CB
+    RE -.->|Raw Data| CB
+    SE -.->|Raw Data| CB
+    
     AE -->|Apply Rules & Ranks| BRE
+    BRE -.->|Ranked Data| AE
     
     AE -.->|Load Data| DL
     BRE -.->|Load Config| CL
     DL -.->|Parse| DS
     CL -.->|Parse| CFG
     
-    CB -->|Return Scoped JSON| LG
+    CB -.->|Return Scoped JSON| LG
     
-    LG -->|System Prompt + Context| LLM
-    LLM -->|Natural Language Explanation| LG
+    LG -->|4. System Prompt + Context| LLM
+    LLM -.->|5. Natural Language Explanation| LG
     
-    LG -->|Chat Response| API
-    API -->|JSON Response| UI
+    LG -.->|Return Chat Response| API
+    API -.->|JSON Response| UI
 ```
 
 ## Core Subsystems
