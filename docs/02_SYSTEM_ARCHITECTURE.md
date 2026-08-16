@@ -6,21 +6,21 @@ CUIA is built on a strict "deterministic-first" architecture. The business logic
 
 ```mermaid
 flowchart TD
-    subgraph Frontend [Frontend (React/Vite)]
+    subgraph Frontend ["Frontend (React/Vite)"]
         UI[Dashboard & Chat UI]
     end
 
-    subgraph Backend [Backend (FastAPI)]
+    subgraph Backend ["Backend (FastAPI)"]
         API[API Routers]
         
-        subgraph AI_Layer [AI Orchestration]
+        subgraph AI_Layer ["AI Orchestration"]
             LG[LangGraph Orchestrator]
             IC[Intent Classifier]
             EE[Entity Extractor]
             CB[Context Builders]
         end
         
-        subgraph Analytics_Layer [Deterministic Analytics]
+        subgraph Analytics_Layer ["Deterministic Analytics"]
             AE[Analytics Engine]
             BRE[Business Rules Engine]
             FE[Forecast Engine]
@@ -28,7 +28,7 @@ flowchart TD
             SE[Simulation Engine]
         end
         
-        subgraph Data_Layer [Data & Config]
+        subgraph Data_Layer ["Data & Config"]
             DS[(dataset.json)]
             CFG[(Config JSONs)]
             DL[Dataset Loader]
@@ -36,7 +36,7 @@ flowchart TD
         end
     end
 
-    subgraph External [External Services]
+    subgraph External ["External Services"]
         LLM[AWS Bedrock]
     end
 
