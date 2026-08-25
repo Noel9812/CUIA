@@ -1,0 +1,22 @@
+ZOOKEEPER
+
+if leader goes down zookeeper sleects another leader so cluster does not go down so brokers will be there
+
+
+confluence has enchanced version
+
+
+ui interface to see all details by confluence , its a control center
+
+control center helps us monitor and exposes a api endpoint
+
+jmix endpoint - metrics endpoint - the memory , cpu and things of the kafka cluster
+
+broker info from contro center api and then hit the jmix endpoint and 
+
+
+expensive operayoin , hitting the jmix endpoj tbcos many data is there
+using flask schelder we are running a job every 60 min to trigger the api call to hit the jmix endpoint and extract the data
+
+
+

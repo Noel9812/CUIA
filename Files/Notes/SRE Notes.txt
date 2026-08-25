@@ -1,0 +1,49 @@
+silver - sit/dev
+gold - uat/perf
+platinum - prod/dr
+
+aks-dig-plat-prod
+aks-gbd-plat-prod
+aks-dig-shrd-plat-prod
+
+in aks deployed in ns level
+in eks deployed in cluster level
+
+
+
+SRE ONBOARDING AND ACCESS QUICK REFERENCE GUIDE - Digital Site Reliability Engineering - Confluence
+
+ https://confluence.elevancehealth.com/pages/viewpage.action?spaceKey=SOADO&title=AWS+Access
+
+https://confluence.elevancehealth.com/pages/viewpage.action?pageId=1960775243&spaceKey=DSRE&title=AKS%2BARIS
+
+
+index=apigee_prod  URI=/v1/hipaa/benefits/bnfts27xrouting |eval APIRespTime=TransactionSentEndtime-TransactionReceivedStartTime | timechart span=1h perc90(APIRespTime) --> To check latency issue,..
+ 
+index=sckl_eks_plat source=*pcgrouppreferenceswrapper* Exception - For any errors for specific service
+ 
+index=sckl_eks_plat cluster_name="tenxeng-platinum-container" source=*sydneybnftdocsv1 "error occurred in message handler"*
+ 
+index=apigee_prod ms.tenxeng*  504 Gateway Time-out - For any gateway timeout errors
+ 
+ 
+if we want sample data from Sydeny logs for SMTP use this
+ 
+index=memberportal_aws OR index=sckl_eks_plat Env="prod*" *api.blue.sydneymember.ps.awsdns.internal.das/v7/cp/edp/*/idcards/email* | eval responseTime=round((Elapsed/1000),3)  | timechart  span=15m perc90(responseTime)
+ 
+index=memberportal_aws OR index=sckl_eks_plat Env="prod*" *api.blue.sydneymember.ps.awsdns.internal.das/v7/cp/edp/*/idcards/email* Elapsed>=10000
+ 
+index=apigee_prod /v1/cp/edp/members/authenticate/login | timechart span=10m count by Status - login validation
+ 
+ 
+use this query to monitor the traffic for any ALB timeouts
+ 
+index=apigee_prod ms*.hipaa.ps.awsdns.internal.dasa* Trace Status=504 "504 Gateway Time-out"
+ 
+index=sckl_eks_plat cluster_name="nifi-platinum-container" "k8s.namespace.name"="prod-accum" "*ConnectionLoss*"
+ 
+index=sckl_eks_plat*" *redis connection to *prod.caching.ps.aws.internal.das*" *failed* NOT container_name=*rediscache*  container_name="redisdigitaleligibility-prod"
+ 
+index=kafka_prod "Connection to va*.wellpoint.com:*" failed | stats count by host - lets verify for last 5 mins
+
+

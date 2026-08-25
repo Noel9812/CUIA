@@ -1,0 +1,32 @@
+Linux commands
+
+su - - root access
+su - <username>
+
+sudo passwd <username> - change password
+
+sudo passwd -S <username> - passwd status of a specifc user
+
+sudo usermod -aG <grp name> <username> - adding a user to a group for sudo
+
+newgrp <grp name> - applying the change to the current session itself
+
+sudo -i - new root shell
+
+
+/etc/passwd - all users
+/etc/sudoers - sudo list
+/etc/shadow - passwd
+
+who - logged in users , their login times etc
+w - logged in user and process running
+last - login records
+
+sudo ss -tulpn | grep <port no>
+
+/var/log/auth.log - ssh and auth logs
+
+log files in /var/log/*
+
+
+
